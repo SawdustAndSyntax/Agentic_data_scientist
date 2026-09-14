@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 from sklearn.datasets import load_diabetes
-from automl_py import AutoMLScientist, AutoMLConfig, FeatureDiscovery, LeakageDetector
+
+from automl_py import AutoMLConfig, AutoMLScientist, FeatureDiscovery, LeakageDetector
 
 
 def test_feature_discovery_sales():

@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import pandas as pd
 from sklearn.base import clone
 from sklearn.inspection import permutation_importance
 from sklearn.model_selection import train_test_split
+
 from .metrics import evaluate, scorer_name
 
 

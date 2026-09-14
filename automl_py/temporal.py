@@ -1,13 +1,15 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Mapping
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+
 import pandas as pd
 
 
 @dataclass(frozen=True)
 class FeatureAvailability:
     feature: str
-    available_offset: pd.Timedelta = pd.Timedelta(0)
+    available_offset: pd.Timedelta = field(default_factory=lambda: pd.Timedelta(0))
     description: str = ""
 
 

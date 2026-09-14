@@ -1,5 +1,6 @@
 from sklearn.datasets import load_diabetes
-from automl_py import AutoMLScientist, AutoMLConfig
+
+from automl_py import AutoMLConfig, AutoMLScientist
 
 df = load_diabetes(as_frame=True).frame
 

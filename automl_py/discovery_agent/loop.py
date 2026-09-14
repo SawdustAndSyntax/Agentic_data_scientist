@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 import pandas as pd
+
 from .agent import DataDiscoveryAgent
 from .contracts import DiscoveryRequest
 from .join_validator import JoinValidator

@@ -1,11 +1,14 @@
 from __future__ import annotations
+
 import ast
 import json
 import re
+
 import pandas as pd
+
+from ..contracts import SemanticEntity, SemanticField, SemanticRelationship
 from .base import CatalogAdapter
 from .sql import DBAPIExecutor
-from ..contracts import SemanticEntity, SemanticField, SemanticRelationship
 
 SAFE_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
 

@@ -110,33 +110,35 @@ from automl_py import (
 )
 
 config = AutoMLConfig(
-    task='regression',
-    metric='rmse',
-    preprocessors=('original','scale','pca'),
-    imputation_strategies=('median','mean','knn'),
-    feature_selection=('none','mutual_info'),
+    task="regression",
+    metric="rmse",
+    preprocessors=("original", "scale", "pca"),
+    imputation_strategies=("median", "mean", "knn"),
+    feature_selection=("none", "mutual_info"),
     interaction_terms=True,
-    models=('ridge','elastic_net','rf','extra_trees','hist_gb'),
+    models=("ridge", "elastic_net", "rf", "extra_trees", "hist_gb"),
     n_jobs=-1,
 )
 
-availability = FeatureAvailabilityRegistry({
-    'temperature_forecast': '-1d',
-    'actual_temperature': '+7d',   # future information -> blocked in strict mode
-})
+availability = FeatureAvailabilityRegistry(
+    {
+        "temperature_forecast": "-1d",
+        "actual_temperature": "+7d",  # future information -> blocked in strict mode
+    }
+)
 
 scientist = AutonomousAutoMLScientist(
     config,
-    context='weekly store-level ice cream demand',
+    context="weekly store-level ice cream demand",
     feature_availability=availability,
     feature_families={
-        'weather': ['temperature_forecast','humidity'],
-        'promotion': ['price','discount'],
-        'calendar': ['holiday','week_of_year'],
+        "weather": ["temperature_forecast", "humidity"],
+        "promotion": ["price", "discount"],
+        "calendar": ["holiday", "week_of_year"],
     },
 )
 
-result = scientist.fit(df, 'sales')
+result = scientist.fit(df, "sales")
 print(result.summary())
 print(result.next_experiments())
 ```
@@ -149,13 +151,13 @@ Feature discovery only proposes hypotheses. It does **not** claim weather will i
 from automl_py import compare_candidate_datasets, AutonomousAutoMLScientist
 
 comparison = compare_candidate_datasets(
-    lambda: AutonomousAutoMLScientist(config, context='weekly ice cream demand'),
+    lambda: AutonomousAutoMLScientist(config, context="weekly ice cream demand"),
     base_df=df,
-    target='sales',
+    target="sales",
     candidate_feature_sets={
-        'weather': weather_features,
-        'local_events': event_features,
-        'foot_traffic': traffic_features,
+        "weather": weather_features,
+        "local_events": event_features,
+        "foot_traffic": traffic_features,
     },
 )
 ```
@@ -177,11 +179,13 @@ Regression runs can fit split-conformal intervals. The output includes a nominal
 A good model may be impossible to deploy if it relies on information not known at prediction time.
 
 ```python
-FeatureAvailabilityRegistry({
-    'weather_forecast': '-12h',
-    'actual_weather': '+1d',
-    'final_invoice': '+14d',
-})
+FeatureAvailabilityRegistry(
+    {
+        "weather_forecast": "-12h",
+        "actual_weather": "+1d",
+        "final_invoice": "+14d",
+    }
+)
 ```
 
 Strict mode blocks future-unavailable fields before training.
@@ -405,13 +409,11 @@ weather = engine.evaluate(
     baseline_score=114.0,
     candidate_score=91.0,
     metric="rmse",
-
     business=BusinessValueModel(
         value_per_error_unit=2500,
         annual_decisions=52,
         realization_rate=0.50,
     ),
-
     cost=DataCost(
         annual_license_cost=85_000,
         one_time_integration_cost=30_000,
@@ -462,10 +464,12 @@ The new `ExternalSignalScout` defines a vendor-neutral interface for:
 The core library does not silently buy, subscribe to, or ingest data.
 
 ```python
-scout = ExternalSignalScout([
-    snowflake_marketplace_provider,
-    approved_vendor_catalog_provider,
-])
+scout = ExternalSignalScout(
+    [
+        snowflake_marketplace_provider,
+        approved_vendor_catalog_provider,
+    ]
+)
 
 candidates = scout.search(
     "historical and forecast weather by store location",

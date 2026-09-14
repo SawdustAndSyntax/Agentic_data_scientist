@@ -1,6 +1,6 @@
 from .base import CatalogAdapter
+from .databricks import DatabricksCatalogAdapter
 from .memory import InMemoryCatalogAdapter
 from .snowflake import SnowflakeCatalogAdapter
-from .databricks import DatabricksCatalogAdapter
 
-__all__ = ["CatalogAdapter", "InMemoryCatalogAdapter", "SnowflakeCatalogAdapter", "DatabricksCatalogAdapter"]
+__all__ = ["CatalogAdapter", "DatabricksCatalogAdapter", "InMemoryCatalogAdapter", "SnowflakeCatalogAdapter"]

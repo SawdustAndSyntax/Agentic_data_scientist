@@ -1,6 +1,8 @@
 from __future__ import annotations
+
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Sequence
+from typing import Literal
 
 Task = Literal["regression", "classification"]
 Metric = Literal["r2", "rmse", "mae", "accuracy", "roc_auc", "f1"]

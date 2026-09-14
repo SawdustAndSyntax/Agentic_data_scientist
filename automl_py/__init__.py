@@ -1,104 +1,103 @@
-from .core import AutoML, AutoMLResult
-from .config import AutoMLConfig
-from .scientist import AutoMLScientist, ScientistResult
+from .ablation import add_noise_controls, feature_ablation
 from .autonomous import AutonomousAutoMLScientist, AutonomousScientistResult
-from .profiling import DataProfiler
-from .missingness import MissingnessAnalyzer
-from .leakage import LeakageDetector
+from .config import AutoMLConfig
+from .core import AutoML, AutoMLResult
 from .discovery import FeatureDiscovery
+from .discovery_agent import (
+    DatabricksCatalogAdapter,
+    DataDiscoveryAgent,
+    DatasetCandidate,
+    DiscoveryBudget,
+    DiscoveryRequest,
+    InMemoryCatalogAdapter,
+    JoinPlan,
+    JoinValidator,
+    PredictiveDiscoveryLoop,
+    SemanticEntity,
+    SemanticField,
+    SemanticGraph,
+    SemanticRelationship,
+    SnowflakeCatalogAdapter,
+)
 from .drift import adversarial_validation
-from .ablation import feature_ablation, add_noise_controls
-from .residuals import regression_residual_diagnostics
-from .stability import model_stability
-from .uncertainty import SplitConformalRegressor, ConformalPrediction
-from .experiments import FeatureExperiment, feature_family_value, compare_candidate_datasets
-from .planner import NextExperimentPlanner, ExperimentRecommendation
-from .temporal import FeatureAvailability, FeatureAvailabilityRegistry
+from .experiments import FeatureExperiment, compare_candidate_datasets, feature_family_value
+from .external_discovery import ExternalCatalogProvider, ExternalDatasetCandidate, ExternalSignalScout
 from .features import (
+    DateTimeFeatures,
+    GroupStatisticsEncoder,
     RatioFeatures,
     RowStatistics,
-    GroupStatisticsEncoder,
-    DateTimeFeatures,
     add_lag_features,
     add_rolling_features,
-    make_pca,
     make_feature_selector,
+    make_pca,
 )
-
-from .discovery_agent import (
-    SemanticField,
-    SemanticEntity,
-    SemanticRelationship,
-    DiscoveryRequest,
-    JoinPlan,
-    DatasetCandidate,
-    SemanticGraph,
-    DataDiscoveryAgent,
-    JoinValidator,
-    DiscoveryBudget,
-    PredictiveDiscoveryLoop,
-    SnowflakeCatalogAdapter,
-    DatabricksCatalogAdapter,
-    InMemoryCatalogAdapter,
-)
-from .value_of_information import BusinessValueModel, DataCost, ValueOfInformationEngine, ValueOfInformationResult
 from .information_portfolio import optimize_information_portfolio
-from .external_discovery import ExternalDatasetCandidate, ExternalCatalogProvider, ExternalSignalScout
+from .leakage import LeakageDetector
+from .missingness import MissingnessAnalyzer
+from .planner import ExperimentRecommendation, NextExperimentPlanner
+from .profiling import DataProfiler
+from .residuals import regression_residual_diagnostics
+from .scientist import AutoMLScientist, ScientistResult
+from .stability import model_stability
+from .temporal import FeatureAvailability, FeatureAvailabilityRegistry
+from .uncertainty import ConformalPrediction, SplitConformalRegressor
+from .value_of_information import BusinessValueModel, DataCost, ValueOfInformationEngine, ValueOfInformationResult
 
 __all__ = [
     "AutoML",
-    "AutoMLResult",
     "AutoMLConfig",
+    "AutoMLResult",
     "AutoMLScientist",
-    "ScientistResult",
     "AutonomousAutoMLScientist",
     "AutonomousScientistResult",
-    "DataProfiler",
-    "MissingnessAnalyzer",
-    "LeakageDetector",
-    "FeatureDiscovery",
-    "adversarial_validation",
-    "feature_ablation",
-    "add_noise_controls",
-    "regression_residual_diagnostics",
-    "model_stability",
-    "SplitConformalRegressor",
+    "BusinessValueModel",
     "ConformalPrediction",
-    "FeatureExperiment",
-    "feature_family_value",
-    "compare_candidate_datasets",
-    "NextExperimentPlanner",
+    "DataCost",
+    "DataDiscoveryAgent",
+    "DataProfiler",
+    "DatabricksCatalogAdapter",
+    "DatasetCandidate",
+    "DateTimeFeatures",
+    "DiscoveryBudget",
+    "DiscoveryRequest",
     "ExperimentRecommendation",
+    "ExternalCatalogProvider",
+    "ExternalDatasetCandidate",
+    "ExternalSignalScout",
     "FeatureAvailability",
     "FeatureAvailabilityRegistry",
+    "FeatureDiscovery",
+    "FeatureExperiment",
+    "GroupStatisticsEncoder",
+    "InMemoryCatalogAdapter",
+    "JoinPlan",
+    "JoinValidator",
+    "LeakageDetector",
+    "MissingnessAnalyzer",
+    "NextExperimentPlanner",
+    "PredictiveDiscoveryLoop",
     "RatioFeatures",
     "RowStatistics",
-    "GroupStatisticsEncoder",
-    "DateTimeFeatures",
-    "add_lag_features",
-    "add_rolling_features",
-    "make_pca",
-    "make_feature_selector",
-    "SemanticField",
+    "ScientistResult",
     "SemanticEntity",
-    "SemanticRelationship",
-    "DiscoveryRequest",
-    "JoinPlan",
-    "DatasetCandidate",
+    "SemanticField",
     "SemanticGraph",
-    "DataDiscoveryAgent",
-    "JoinValidator",
-    "DiscoveryBudget",
-    "PredictiveDiscoveryLoop",
+    "SemanticRelationship",
     "SnowflakeCatalogAdapter",
-    "DatabricksCatalogAdapter",
-    "InMemoryCatalogAdapter",
-    "BusinessValueModel",
-    "DataCost",
+    "SplitConformalRegressor",
     "ValueOfInformationEngine",
     "ValueOfInformationResult",
+    "add_lag_features",
+    "add_noise_controls",
+    "add_rolling_features",
+    "adversarial_validation",
+    "compare_candidate_datasets",
+    "feature_ablation",
+    "feature_family_value",
+    "make_feature_selector",
+    "make_pca",
+    "model_stability",
     "optimize_information_portfolio",
-    "ExternalDatasetCandidate",
-    "ExternalCatalogProvider",
-    "ExternalSignalScout",
+    "regression_residual_diagnostics",
 ]

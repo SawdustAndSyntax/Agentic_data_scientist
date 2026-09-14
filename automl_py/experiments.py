@@ -1,9 +1,12 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
 from sklearn.model_selection import cross_val_score
+
 from .metrics import scorer_name
 
 
@@ -22,7 +25,7 @@ def feature_family_value(
     `core` is the set of columns not assigned to any family. Every family is evaluated using
     the same model/CV folds, avoiding apples-to-oranges comparisons.
     """
-    assigned = set(c for cols in feature_families.values() for c in cols)
+    assigned = {c for cols in feature_families.values() for c in cols}
     core = [c for c in X.columns if c not in assigned]
     scorer = scorer_name(metric)
     base_cols = core if core else list(X.columns)

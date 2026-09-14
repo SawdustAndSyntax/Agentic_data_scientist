@@ -1,10 +1,10 @@
 from sklearn.ensemble import (
     ExtraTreesClassifier,
     ExtraTreesRegressor,
-    RandomForestClassifier,
-    RandomForestRegressor,
     HistGradientBoostingClassifier,
     HistGradientBoostingRegressor,
+    RandomForestClassifier,
+    RandomForestRegressor,
 )
 from sklearn.linear_model import ElasticNet, Lasso, LogisticRegression, Ridge
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor

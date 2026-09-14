@@ -1,18 +1,20 @@
-from dataclasses import dataclass
-from pathlib import Path
-from time import perf_counter
 import json
 import traceback
 import warnings
+from dataclasses import dataclass
+from pathlib import Path
+from time import perf_counter
+
 import joblib
 import numpy as np
 import pandas as pd
 from sklearn.inspection import permutation_importance
-from sklearn.model_selection import RepeatedKFold, RepeatedStratifiedKFold, RandomizedSearchCV, train_test_split, cross_val_score
+from sklearn.model_selection import RandomizedSearchCV, RepeatedKFold, RepeatedStratifiedKFold, cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
+
 from .config import AutoMLConfig
 from .metrics import evaluate, higher_is_better, scorer_name
-from .preprocessing import build_preprocessor, build_feature_selector
+from .preprocessing import build_feature_selector, build_preprocessor
 from .registry import build_estimator, default_models, parameter_space
 
 
@@ -122,7 +124,7 @@ class AutoML:
                                         fit = pipe
                                         params = {}
                                     if caught:
-                                        warn = " | ".join(sorted(set(str(w.message) for w in caught)))[:3000]
+                                        warn = " | ".join(sorted({str(w.message) for w in caught}))[:3000]
                                 cvscore = -raw if metric in {"rmse", "mae"} else raw
                                 yp = fit.predict(Xte)
                                 prob = (

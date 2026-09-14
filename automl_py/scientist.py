@@ -1,14 +1,16 @@
 from dataclasses import dataclass
 from pathlib import Path
+
 import pandas as pd
 from sklearn.model_selection import train_test_split
+
 from .config import AutoMLConfig
 from .core import AutoML
-from .profiling import DataProfiler
-from .missingness import MissingnessAnalyzer
-from .leakage import LeakageDetector
 from .discovery import FeatureDiscovery
 from .drift import adversarial_validation
+from .leakage import LeakageDetector
+from .missingness import MissingnessAnalyzer
+from .profiling import DataProfiler
 from .residuals import regression_residual_diagnostics
 
 

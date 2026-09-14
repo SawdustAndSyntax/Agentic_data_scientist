@@ -5,9 +5,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.model_selection import train_test_split
 
 
 def adversarial_validation(train_df, test_df, random_state=100):

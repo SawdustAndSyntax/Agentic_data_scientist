@@ -1,10 +1,10 @@
 from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
 from sklearn.experimental import enable_iterative_imputer  # noqa:F401
-from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler, PolynomialFeatures
 from sklearn.feature_selection import SelectKBest, f_classif, f_regression, mutual_info_classif, mutual_info_regression
+from sklearn.impute import IterativeImputer, KNNImputer, SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, PolynomialFeatures, StandardScaler
 
 
 def _numeric_imputer(strategy, add_indicator):

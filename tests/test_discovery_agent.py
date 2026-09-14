@@ -1,13 +1,14 @@
 import pandas as pd
+
 from automl_py.discovery_agent import (
+    DataDiscoveryAgent,
+    DiscoveryRequest,
+    InMemoryCatalogAdapter,
+    JoinValidator,
+    PredictiveDiscoveryLoop,
     SemanticEntity,
     SemanticField,
     SemanticRelationship,
-    DiscoveryRequest,
-    InMemoryCatalogAdapter,
-    DataDiscoveryAgent,
-    JoinValidator,
-    PredictiveDiscoveryLoop,
     SnowflakeCatalogAdapter,
 )
 
@@ -186,7 +187,7 @@ def test_snowflake_semantic_adapter():
     a = SnowflakeCatalogAdapter(executor=FakeExecutor(), database="ANALYTICS")
     entities = a.entities()
     rels = a.relationships()
-    weather = [e for e in entities if e.name == "WEATHER"][0]
+    weather = next(e for e in entities if e.name == "WEATHER")
     assert any(f.name == "TEMPERATURE" and f.role == "dimension" for f in weather.fields)
     assert rels[0].source.endswith(".STORE") and rels[0].target.endswith(".WEATHER")
     assert rels[0].source_keys == ("WEATHER_STATION_ID",)

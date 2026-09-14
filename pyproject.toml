@@ -29,3 +29,11 @@ include = ["automl_py*"]
 
 [tool.ruff]
 line-length = 140
+
+[tool.ruff.lint]
+# Pin the rule set explicitly so new ruff releases with different defaults
+# cannot break CI. Import sorting, pyupgrade, comprehensions and ruff-specific
+# checks are enforced; broad-exception rules (BLE, S) are intentionally not.
+select = ["E4", "E7", "E9", "F", "I", "UP", "C4", "RUF"]
+# The multiplication sign is used intentionally in human-readable join-key descriptions.
+allowed-confusables = ["×"]

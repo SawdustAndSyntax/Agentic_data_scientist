@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 import pandas as pd
-from .contracts import DiscoveryRequest, DatasetCandidate
+
+from .adapters.base import CatalogAdapter
+from .contracts import DatasetCandidate, DiscoveryRequest
 from .graph import SemanticGraph
 from .profiling import BoundedProfiler, DiscoveryBudget
 from .scoring import semantic_relevance
-from .adapters.base import CatalogAdapter
 
 
 class DataDiscoveryAgent:

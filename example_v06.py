@@ -1,4 +1,5 @@
 from sklearn.datasets import load_diabetes
+
 from automl_py import AutoMLConfig, AutonomousAutoMLScientist, FeatureAvailabilityRegistry
 
 frame = load_diabetes(as_frame=True).frame

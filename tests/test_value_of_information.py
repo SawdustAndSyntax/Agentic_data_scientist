@@ -1,7 +1,7 @@
 import pandas as pd
 
-from automl_py.value_of_information import BusinessValueModel, DataCost, ValueOfInformationEngine
 from automl_py.information_portfolio import optimize_information_portfolio
+from automl_py.value_of_information import BusinessValueModel, DataCost, ValueOfInformationEngine
 
 
 def test_voi_lower_is_better():

@@ -67,7 +67,7 @@ class GroupStatisticsEncoder(BaseEstimator, TransformerMixin):
         X = pd.DataFrame(X).copy()
         for v in self.value_cols:
             for s in self.stats:
-                name = "__".join(self.group_cols + [v, s])
+                name = "__".join([*self.group_cols, v, s])
                 m = self.maps_[(v, s)]
                 vals = (
                     X[self.group_cols[0]].map(m)

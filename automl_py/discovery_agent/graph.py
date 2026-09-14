@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from collections import deque
-from .contracts import SemanticEntity, SemanticRelationship, JoinPlan
+
+from .contracts import JoinPlan, SemanticEntity, SemanticRelationship
 
 
 class SemanticGraph:
@@ -41,8 +43,8 @@ class SemanticGraph:
             for nxt, rel in self.neighbors(node):
                 if nxt in seen:
                     continue
-                npath = path + [nxt]
-                nrels = rels + [rel]
+                npath = [*path, nxt]
+                nrels = [*rels, rel]
                 if nxt == target:
                     confidence = 1.0
                     warnings = []
