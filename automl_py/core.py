@@ -25,6 +25,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.inspection import permutation_importance
+from sklearn.metrics import get_scorer
 from sklearn.model_selection import RandomizedSearchCV, cross_val_score
 from sklearn.pipeline import Pipeline
 
@@ -49,11 +50,36 @@ RESULT_COLUMNS = [
     "cv_scores",
     "n_folds",
     "validation_strategy",
+    "stage",
+    "screen_score",
     "train_minutes",
     "best_params",
     "error",
     "warning",
 ]
+
+
+def _result_row(target, cfg, cv_perf, cv_std, cv_scores, folds, stage, screen_score, minutes, params, err, warn) -> dict:
+    prep, imp, sel, model_name = cfg
+    return {
+        "target": target,
+        "preprocess": prep,
+        "imputation": imp,
+        "selection": sel,
+        "model": model_name,
+        "tag": f"{target}__{prep}__imp-{imp}__sel-{sel}__{model_name}",
+        "cv_performance": cv_perf,
+        "cv_std": cv_std,
+        "cv_scores": json.dumps(cv_scores),
+        "n_folds": len(folds),
+        "validation_strategy": folds.strategy_name,
+        "stage": stage,
+        "screen_score": np.nan if screen_score is None else screen_score,
+        "train_minutes": minutes,
+        "best_params": json.dumps(params, default=str),
+        "error": err,
+        "warning": warn,
+    }
 
 
 def to_metric_scale(metric: str, scorer_value: float) -> float:
@@ -161,6 +187,7 @@ class AutoML:
         diagnostics = DiagnosticLog()
         excluded = set(targets) | ({vcfg.timestamp_column} if vcfg.timestamp_column else set())
         feature_cols = [col for col in df.columns if col not in excluded]
+        scorer = get_scorer(scorer_name(metric))
 
         rows, fitted, preds, oof_X, imps, factories = [], {}, {}, {}, [], {}
         folds_by_target, holdouts, holdout_evals, dev_index = {}, {}, {}, {}
@@ -185,88 +212,134 @@ class AutoML:
                     f"{target}: {folds.strategy_name} with {len(folds)} folds on {len(dev)} development rows; {len(hold)} holdout rows locked",
                 )
 
-                for prep in c.preprocessors:
-                    for imp in c.imputation_strategies:
-                        for sel in c.feature_selection:
-                            for model_name in models:
-                                tag = f"{target}__{prep}__imp-{imp}__sel-{sel}__{model_name}"
-                                start = perf_counter()
-                                err = warn = None
-                                cv_scores: list[float] = []
-                                params: dict = {}
-                                try:
-                                    factory = pipeline_factory(c, prep, imp, sel, model_name)
-                                    pipe = factory(X_dev)
-                                    space = parameter_space(model_name, c.task)
-                                    with warnings.catch_warnings(record=True) as caught:
-                                        warnings.simplefilter("always")
-                                        if c.tune and space:
-                                            n = min(c.max_candidates_per_model, max(1, int(np.prod([len(v) for v in space.values()]))))
-                                            search = RandomizedSearchCV(
-                                                pipe,
-                                                space,
-                                                n_iter=n,
-                                                scoring=scorer_name(metric),
-                                                cv=folds,
-                                                random_state=c.random_state,
-                                                n_jobs=c.n_jobs,
-                                                refit=True,
-                                                error_score=np.nan,
-                                            )
-                                            search.fit(X_dev, y_dev)
-                                            fit = search.best_estimator_
-                                            params = dict(search.best_params_)
-                                            cv_scores = [
-                                                to_metric_scale(metric, search.cv_results_[f"split{i}_test_score"][search.best_index_])
-                                                for i in range(len(folds))
-                                            ]
-                                        else:
-                                            raw = cross_val_score(
-                                                pipe,
-                                                X_dev,
-                                                y_dev,
-                                                scoring=scorer_name(metric),
-                                                cv=folds,
-                                                n_jobs=c.n_jobs,
-                                                error_score=np.nan,
-                                            )
-                                            cv_scores = [to_metric_scale(metric, s) for s in raw]
-                                            pipe.fit(X_dev, y_dev)
-                                            fit = pipe
-                                        if caught:
-                                            warn = " | ".join(sorted({str(w.message) for w in caught}))[:3000]
-                                    fitted[tag] = fit
-                                    factories[tag] = pipeline_factory(c, prep, imp, sel, model_name, params)
-                                    if c.save_models:
-                                        joblib.dump(fit, out / f"{tag}.joblib")
-                                except Exception as e:
-                                    err = f"{type(e).__name__}: {e}"
-                                    warn = warn or traceback.format_exc(limit=1).strip()
-                                    diagnostics.error("model_search", e, context=tag)
-                                finite = [s for s in cv_scores if np.isfinite(s)]
-                                rows.append(
-                                    {
-                                        "target": target,
-                                        "preprocess": prep,
-                                        "imputation": imp,
-                                        "selection": sel,
-                                        "model": model_name,
-                                        "tag": tag,
-                                        "cv_performance": float(np.mean(finite)) if finite else np.nan,
-                                        "cv_std": float(np.std(finite, ddof=1)) if len(finite) > 1 else np.nan,
-                                        "cv_scores": json.dumps(cv_scores),
-                                        "n_folds": len(folds),
-                                        "validation_strategy": folds.strategy_name,
-                                        "train_minutes": (perf_counter() - start) / 60,
-                                        "best_params": json.dumps(params, default=str),
-                                        "error": err,
-                                        "warning": warn,
-                                    }
+                configs = [
+                    (prep, imp, sel, model_name)
+                    for prep in c.preprocessors
+                    for imp in c.imputation_strategies
+                    for sel in c.feature_selection
+                    for model_name in models
+                ]
+                # ---- stage 1: cheap screening on the first fold ------------------------------------
+                screen_scores: dict[tuple, float] = {}
+                survivors = list(configs)
+                if c.screen_configurations and len(configs) > c.screen_top_k:
+                    tr0, te0 = folds.folds[0]
+                    for cfg in configs:
+                        prep, imp, sel, model_name = cfg
+                        try:
+                            pipe = pipeline_factory(c, prep, imp, sel, model_name)(X_dev.iloc[tr0])
+                            with warnings.catch_warnings():
+                                warnings.simplefilter("ignore")
+                                pipe.fit(X_dev.iloc[tr0], y_dev.iloc[tr0])
+                                raw = scorer(pipe, X_dev.iloc[te0], y_dev.iloc[te0])
+                            screen_scores[cfg] = to_metric_scale(metric, raw)
+                        except Exception as e:
+                            screen_scores[cfg] = np.nan
+                            diagnostics.error("screening", e, context="__".join(cfg))
+                    ranked = sorted(
+                        [cfg for cfg in configs if np.isfinite(screen_scores[cfg])],
+                        key=lambda cfg: screen_scores[cfg],
+                        reverse=higher_is_better(metric),
+                    )
+                    survivors = ranked[: c.screen_top_k]
+                    diagnostics.record(
+                        "screening",
+                        "INFO",
+                        f"{target}: screened {len(configs)} configurations on fold 1; {len(survivors)} advance to full validation",
+                    )
+                    for cfg in configs:
+                        if cfg not in survivors:
+                            prep, imp, sel, model_name = cfg
+                            rows.append(
+                                _result_row(target, cfg, np.nan, np.nan, [], folds, "screened_out", screen_scores[cfg], 0.0, {}, None, None)
+                            )
+                # ---- stage 2: full validation (+ tuning) on survivors ------------------------------
+                search_started = perf_counter()
+                for i, cfg in enumerate(survivors):
+                    prep, imp, sel, model_name = cfg
+                    tag = f"{target}__{prep}__imp-{imp}__sel-{sel}__{model_name}"
+                    if c.max_search_seconds is not None and i > 0 and perf_counter() - search_started > c.max_search_seconds:
+                        rows.append(
+                            _result_row(
+                                target, cfg, np.nan, np.nan, [], folds, "skipped_time_budget", screen_scores.get(cfg), 0.0, {}, None, None
+                            )
+                        )
+                        continue
+                    start = perf_counter()
+                    err = warn = None
+                    cv_scores: list[float] = []
+                    params: dict = {}
+                    try:
+                        factory = pipeline_factory(c, prep, imp, sel, model_name)
+                        pipe = factory(X_dev)
+                        space = parameter_space(model_name, c.task)
+                        with warnings.catch_warnings(record=True) as caught:
+                            warnings.simplefilter("always")
+                            if c.tune and space:
+                                n = min(c.max_candidates_per_model, max(1, int(np.prod([len(v) for v in space.values()]))))
+                                search = RandomizedSearchCV(
+                                    pipe,
+                                    space,
+                                    n_iter=n,
+                                    scoring=scorer_name(metric),
+                                    cv=folds,
+                                    random_state=c.random_state,
+                                    n_jobs=c.n_jobs,
+                                    refit=True,
+                                    error_score=np.nan,
                                 )
+                                search.fit(X_dev, y_dev)
+                                fit = search.best_estimator_
+                                params = dict(search.best_params_)
+                                cv_scores = [
+                                    to_metric_scale(metric, search.cv_results_[f"split{i}_test_score"][search.best_index_])
+                                    for i in range(len(folds))
+                                ]
+                            else:
+                                raw = cross_val_score(
+                                    pipe, X_dev, y_dev, scoring=scorer_name(metric), cv=folds, n_jobs=c.n_jobs, error_score=np.nan
+                                )
+                                cv_scores = [to_metric_scale(metric, s) for s in raw]
+                                pipe.fit(X_dev, y_dev)
+                                fit = pipe
+                            if caught:
+                                warn = " | ".join(sorted({str(w.message) for w in caught}))[:3000]
+                        fitted[tag] = fit
+                        factories[tag] = pipeline_factory(c, prep, imp, sel, model_name, params)
+                        if c.save_models:
+                            joblib.dump(fit, out / f"{tag}.joblib")
+                    except Exception as e:
+                        err = f"{type(e).__name__}: {e}"
+                        warn = warn or traceback.format_exc(limit=1).strip()
+                        diagnostics.error("model_search", e, context=tag)
+                    finite = [s for s in cv_scores if np.isfinite(s)]
+                    rows.append(
+                        _result_row(
+                            target,
+                            cfg,
+                            float(np.mean(finite)) if finite else np.nan,
+                            float(np.std(finite, ddof=1)) if len(finite) > 1 else np.nan,
+                            cv_scores,
+                            folds,
+                            "full",
+                            screen_scores.get(cfg),
+                            (perf_counter() - start) / 60,
+                            params,
+                            err,
+                            warn,
+                        )
+                    )
+                skipped = [r for r in rows if r["target"] == target and r["stage"] == "skipped_time_budget"]
+                if skipped:
+                    diagnostics.record(
+                        "model_search",
+                        "WARNING",
+                        f"{target}: {len(skipped)} configuration(s) skipped after {c.max_search_seconds}s search budget",
+                    )
 
                 # ---- champion selection on development folds only -------------------------------
                 tr = pd.DataFrame([r for r in rows if r["target"] == target])
-                ok = tr[tr.error.isna() & tr.cv_performance.notna()]
+                ok = tr[(tr.stage == "full") & tr.error.isna() & tr.cv_performance.notna()]
                 if ok.empty:
                     diagnostics.record("model_search", "ERROR", f"{target}: no candidate configuration succeeded", error_type="NoChampion")
                     continue

@@ -21,7 +21,12 @@ Documentation never claims more autonomy or rigour than the code and tests imple
 | First-class validation strategies: random, stratified, group, rolling-origin, expanding, sliding windows; grouped temporal (store × week) | **IMPLEMENTED** | `automl_py/validation.py` |
 | Identical folds shared by search, tuning, feature-family and candidate experiments, noise controls, stability, conformal calibration | **IMPLEMENTED** | `FoldSet` |
 | Locked, single-use final holdout with access log | **IMPLEMENTED** | `automl_py/holdout.py` |
-| Paired uplift statistics, bootstrap confidence intervals, positive-fold share | **IMPLEMENTED** | `automl_py/judge.py` |
+| Paired uplift statistics: Nadeau–Bengio corrected interval and p-value (bootstrap secondary), positive-fold share | **IMPLEMENTED** | `automl_py/judge.py` |
+| Benjamini–Hochberg control across candidates per iteration; forward selection | **IMPLEMENTED** | `ExperimentJudge.control_false_discoveries`, `orchestrator.py` |
+| Two-stage search screening and a search time budget | **IMPLEMENTED** | `automl_py/core.py` |
+| Derived-feature candidates (transforms, interactions, past-only lags/rolling) | **IMPLEMENTED** | `automl_py/sources.py` |
+| Point-in-time (as-of) joins with availability lag | **IMPLEMENTED** | `PointInTimeJoiner` |
+| Auditable run report and reproducibility manifest | **IMPLEMENTED** | `automl_py/report.py` |
 | Noise controls (random and permuted control features) and minimum absolute/relative gain | **IMPLEMENTED** | `ExperimentJudge`, `experiments.py` |
 | Decisions `KEEP / REJECT / INCONCLUSIVE / INVALID / REVIEW` | **IMPLEMENTED** | `ExperimentJudge` |
 | Feature availability distinct from validation; `available / unavailable / unknown`; unknown never treated as safe | **IMPLEMENTED** | `automl_py/temporal.py` |
@@ -33,10 +38,11 @@ Documentation never claims more autonomy or rigour than the code and tests imple
 | Structured diagnostics; no silent exception swallowing | **IMPLEMENTED** | `automl_py/diagnostics.py` |
 | Hybrid relevance: lexical guardrail + graph + grain + memory prior; embedding provider hook | **IMPLEMENTED** (embedding provider optional) | `discovery_agent/scoring.py` |
 | Snowflake / Databricks catalog adapters | **EXPERIMENTAL** (tested with fake executors, not against live warehouses) | `discovery_agent/adapters/` |
-| Warehouse-backed candidate source for the orchestrator | **EXPERIMENTAL** (`PredictiveDiscoveryLoop` bridges catalog candidates with injected loaders; the in-memory source is tested end-to-end) | `discovery_agent/loop.py` |
+| Discovery-backed candidate source for the orchestrator (catalog → loader → as-of join → gate → judge) | **IMPLEMENTED** against the in-memory catalog; **EXPERIMENTAL** against live warehouses | `DiscoveryCandidateSource` |
 | Champion feature ablation on shared folds | **EXPERIMENTAL** (`run_feature_ablation`) | `ablation.py` |
 | MLflow logging of the champion | **EXPERIMENTAL** (`enable_mlflow`, `[tracking]` extra) | `tracking.py` |
-| LLM-assisted hypothesis reasoning and embedding relevance | **PLANNED** — hooks exist (`HypothesisReasoner`, `EmbeddingRelevanceProvider`); no provider ships | — |
+| LLM-assisted hypothesis reasoning | **EXPERIMENTAL** — `AnthropicHypothesisReasoner` (`[llm]` extra) re-ranks and proposes hypotheses that must cite provided evidence; tested with a fake client, not against the live API | `automl_py/llm.py` |
+| Embedding relevance provider | **PLANNED** — hook exists (`EmbeddingRelevanceProvider`); no provider ships | — |
 | Decision-sensitivity / non-linear business cost models | **PLANNED** — the value model is linear in metric units | — |
 | Automatic external data acquisition | **NOT PLANNED** — search/profile/test/value/recommend only; acquisition stays human-approved | `external_discovery.py` |
 | Automatic causal discovery, guaranteed best model | **NOT CLAIMED** | — |

@@ -180,6 +180,11 @@ class LoopState:
     noise_uplifts: list[float]
     kept: list[str] = field(default_factory=list)
     rounds_without_improvement: int = 0
+    frame: pd.DataFrame | None = None  # development rows with every original column (keys, timestamps)
+    timestamps: pd.Series | None = None
+    groups: pd.Series | None = None
+    target: str = ""
+    metric: str = ""
 
     @property
     def baseline_mean(self) -> float:
@@ -240,7 +245,11 @@ class PredictiveDiscoveryOrchestrator:
         governance_check: Callable[[CandidateFeatureSet], str | None] | None = None,
         min_candidate_coverage: float = 0.70,
         n_jobs: int = 1,
+        adopt_per_iteration: int | None = None,
     ):
+        """``adopt_per_iteration``: how many BH-surviving KEEP candidates to adopt per iteration
+        (forward selection; the rest are re-tested against the new baseline). Defaults to
+        ``config.adopt_per_iteration``; 0 or None adopts every survivor at once."""
         self.config = config
         self.source = candidate_source
         self.availability = feature_availability
@@ -258,6 +267,7 @@ class PredictiveDiscoveryOrchestrator:
         self.governance_check = governance_check
         self.min_candidate_coverage = min_candidate_coverage
         self.n_jobs = n_jobs
+        self.adopt_per_iteration = config.adopt_per_iteration if adopt_per_iteration is None else adopt_per_iteration
 
     # ------------------------------------------------------------------------------------------ #
     def run(self, df: pd.DataFrame, target: str, context: str = "", scientist_result: ScientistResult | None = None) -> OrchestratorResult:
@@ -285,7 +295,20 @@ class PredictiveDiscoveryOrchestrator:
         groups, timestamps = resolve_columns(df.loc[X_dev.index], vcfg)
         base_scores = fold_scores(factory, X_dev, y_dev, folds, metric, self.n_jobs)
         noise = self._noise(factory, X_dev, y_dev, folds, metric, list(X_dev.columns), base_scores)
-        state = LoopState(0, list(X_dev.columns), X_dev, y_dev, base_scores, noise)
+        state = LoopState(
+            0,
+            list(X_dev.columns),
+            X_dev,
+            y_dev,
+            base_scores,
+            noise,
+            frame=df.loc[X_dev.index],
+            timestamps=timestamps,
+            groups=groups,
+            target=target,
+            metric=metric,
+        )
+        test_train_ratio = float(np.mean([len(te) / max(1, len(tr)) for tr, te in folds]))
         budget = ExperimentBudget(self.stop.max_experiments, self.stop.max_queries, self.stop.max_seconds)
         history = [{"iteration": 0, "baseline_mean": state.baseline_mean, "n_features": len(state.feature_columns), "event": "baseline"}]
         hyp_log: list[pd.DataFrame] = []
@@ -323,35 +346,45 @@ class PredictiveDiscoveryOrchestrator:
                 stop_reason = NO_CANDIDATES
                 break
             improved = False
+            batch: list[tuple[ExperimentRequest, ExperimentResult]] = []
             while queue:
                 exhausted = budget.exhausted()
                 if exhausted:
                     stop_reason = exhausted
                     break
                 req = queue.pop()
-                res = self._run_request(req, state, factory, folds, metric)
-                experiments.append(res)
+                res = self._run_request(req, state, factory, folds, metric, test_train_ratio)
+                batch.append((req, res))
                 budget.charge_experiment()
                 budget.charge_query(req.candidate.queries)
-                if res.decision == KEEP:
-                    cols = res.candidate_columns
-                    state.X = state.X.join(req.candidate.frame[cols], how="left")
-                    state.feature_columns = state.feature_columns + cols
-                    state.baseline_scores = list(res.candidate_scores)
-                    state.noise_uplifts = self._noise(
-                        factory, state.X, state.y, folds, metric, state.feature_columns, state.baseline_scores
-                    )
-                    state.kept.append(req.candidate.name)
-                    holdout.with_columns(req.candidate.frame, cols)
-                    improved = True
-                    history.append(
-                        {
-                            "iteration": state.iteration + 1,
-                            "baseline_mean": state.baseline_mean,
-                            "n_features": len(state.feature_columns),
-                            "event": f"KEEP {req.candidate.name}",
-                        }
-                    )
+            # multiple-comparison control across this iteration's candidates, then forward selection
+            self.judge.control_false_discoveries([r.verdict for _, r in batch])
+            survivors = sorted(
+                [(req, res) for req, res in batch if res.decision == KEEP], key=lambda pair: pair[1].verdict.uplift.mean, reverse=True
+            )
+            adopted = survivors[: self.adopt_per_iteration] if self.adopt_per_iteration else survivors
+            adopted_names = {req.candidate.name for req, _ in adopted}
+            for req, res in batch:
+                experiments.append(res)
+                self._remember(req, res, state, folds, adopted=req.candidate.name in adopted_names)
+            for req, res in adopted:
+                cols = res.candidate_columns
+                state.X = state.X.join(req.candidate.frame[cols], how="left")
+                state.feature_columns = state.feature_columns + cols
+                state.kept.append(req.candidate.name)
+                holdout.with_columns(req.candidate.frame, cols)
+                improved = True
+            if adopted:
+                state.baseline_scores = fold_scores(factory, state.X[state.feature_columns], state.y, folds, metric, self.n_jobs)
+                state.noise_uplifts = self._noise(factory, state.X, state.y, folds, metric, state.feature_columns, state.baseline_scores)
+                history.append(
+                    {
+                        "iteration": state.iteration + 1,
+                        "baseline_mean": state.baseline_mean,
+                        "n_features": len(state.feature_columns),
+                        "event": "KEEP " + ", ".join(req.candidate.name for req, _ in adopted),
+                    }
+                )
             state.iteration += 1
             if stop_reason:
                 break
@@ -505,7 +538,7 @@ class PredictiveDiscoveryOrchestrator:
                 invalid.append(f"LOW_COVERAGE: candidate covers {coverage:.1%} of development rows (< {self.min_candidate_coverage:.0%})")
         return invalid, review
 
-    def _run_request(self, req: ExperimentRequest, state: LoopState, factory, folds, metric) -> ExperimentResult:
+    def _run_request(self, req: ExperimentRequest, state: LoopState, factory, folds, metric, test_train_ratio=None) -> ExperimentResult:
         cand = req.candidate
         cols = [col for col in cand.feature_columns() if col not in state.feature_columns]
         invalid, review = self._gate(req, state, cols)
@@ -527,6 +560,7 @@ class PredictiveDiscoveryOrchestrator:
             minimum_gain=self.stop.minimum_gain,
             random_state=self.config.random_state,
             n_jobs=self.n_jobs,
+            test_train_ratio=test_train_ratio,
             extra={
                 "hypothesis_id": req.hypothesis.hypothesis_id,
                 "iteration": req.iteration,
@@ -534,11 +568,16 @@ class PredictiveDiscoveryOrchestrator:
                 "cost": cand.cost,
             },
         )
-        self.memory.add(
+        return res
+
+    def _remember(self, req: ExperimentRequest, res: ExperimentResult, state: LoopState, folds, *, adopted: bool):
+        cand = req.candidate
+        res.extra["adopted"] = adopted
+        rec = self.memory.add(
             iteration=req.iteration,
             hypothesis=req.hypothesis,
             candidate=cand.name,
-            candidate_columns=cols,
+            candidate_columns=res.candidate_columns,
             decision=res.decision,
             validation_strategy=folds.strategy_name,
             base_columns=state.feature_columns,
@@ -546,15 +585,11 @@ class PredictiveDiscoveryOrchestrator:
             baseline_scores=res.baseline_scores,
             candidate_scores=res.candidate_scores,
             verdict=res.verdict,
-            extra={"request_id": req.request_id, "source": cand.source, "cost": cand.cost},
+            extra={"request_id": req.request_id, "source": cand.source, "cost": cand.cost, "adopted": adopted},
         )
         self.diagnostics.record(
-            "experiment",
-            "INFO",
-            f"{req.request_id} {cand.name}: {res.verdict.summary()}",
-            experiment_id=self.memory.records[-1].experiment_id,
+            "experiment", "INFO", f"{req.request_id} {cand.name}: {res.verdict.summary()}", experiment_id=rec.experiment_id
         )
-        return res
 
     def _save(self, result: OrchestratorResult, holdout):
         out = Path(self.config.artifact_dir)

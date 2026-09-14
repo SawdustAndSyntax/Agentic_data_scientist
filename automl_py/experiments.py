@@ -100,6 +100,7 @@ def judge_from_config(config: AutoMLConfig) -> ExperimentJudge:
         minimum_relative_gain=config.minimum_relative_gain,
         noise_quantile=config.noise_quantile,
         ci_level=config.uplift_ci_level,
+        ci_method=config.uplift_ci_method,
         min_positive_share=config.min_positive_fold_share,
         random_state=config.random_state,
     )
@@ -180,6 +181,7 @@ def run_paired_experiment(
     random_state: int = 100,
     n_jobs: int = 1,
     extra: dict | None = None,
+    test_train_ratio: float | None = None,
 ) -> ExperimentResult:
     """Score baseline and baseline+candidate on identical folds and judge the paired uplift.
 
@@ -204,6 +206,8 @@ def run_paired_experiment(
         noise = noise_control_uplifts(
             model_or_factory, X, y, folds, metric, base_cols, base, n_controls=n_noise_controls, random_state=random_state, n_jobs=n_jobs
         )
+    if test_train_ratio is None:
+        test_train_ratio = float(np.mean([len(te) / max(1, len(tr)) for tr, te in folds]))
     verdict = judge.evaluate(
         base,
         cand,
@@ -212,6 +216,7 @@ def run_paired_experiment(
         higher_is_better=hib,
         invalid_reasons=invalid_reasons,
         review_reasons=review_reasons,
+        test_train_ratio=test_train_ratio,
     )
     return ExperimentResult(name, metric, hib, base_cols, cand_cols, base, cand, verdict, folds.strategy_name, noise, dict(extra or {}))
 

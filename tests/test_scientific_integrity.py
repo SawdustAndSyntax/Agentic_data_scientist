@@ -324,15 +324,54 @@ def test_inconclusive_when_confidence_interval_crosses_no_effect():
     assert v.uplift.mean == pytest.approx(1.2)
     assert v.uplift.ci_low < 0 < v.uplift.ci_high
     assert v.decision == INCONCLUSIVE
-    strong = judge.evaluate(base, [101.0, 103.0, 104.0, 108.0, 101.0], noise_scores=[0.4, 1.3, 1.8, 0.2, 0.9], higher_is_better=False)
-    assert (
-        strong.decision == KEEP
-        and strong.uplift.ci_low > 0
-        and strong.noise_threshold == pytest.approx(np.quantile([0.4, 1.3, 1.8, 0.2, 0.9], 0.95))
-    )
+    strong = judge.evaluate(base, [101.0, 103.0, 104.0, 103.0, 101.0], noise_scores=[0.4, 1.3, 1.8, 0.2, 0.9], higher_is_better=False)
+    assert strong.decision == KEEP and strong.uplift.ci_low > 0
+    assert strong.noise_threshold == pytest.approx(np.quantile([0.4, 1.3, 1.8, 0.2, 0.9], 0.95))
     d = strong.to_dict()
-    for key in ("mean_uplift", "median_uplift", "uplift_std", "positive_share", "ci_low", "ci_high", "worst_uplift", "best_uplift"):
+    for key in (
+        "mean_uplift",
+        "median_uplift",
+        "uplift_std",
+        "positive_share",
+        "ci_low",
+        "ci_high",
+        "worst_uplift",
+        "best_uplift",
+        "p_value",
+        "ci_method",
+    ):
         assert key in d
+
+
+def test_corrected_interval_is_wider_than_naive_bootstrap_on_dependent_folds():
+    """Nadeau-Bengio inflates the variance for overlapping training sets; the spec's
+    worked example with one weak fold (+1) is honest-INCONCLUSIVE, not KEEP."""
+    base = [114.0, 110.0, 118.0, 109.0, 115.0]
+    cand = [101.0, 103.0, 104.0, 108.0, 101.0]  # diffs +13, +7, +14, +1, +14
+    corrected = ExperimentJudge(minimum_absolute_gain=2.0).evaluate(base, cand, higher_is_better=False)
+    naive = ExperimentJudge(minimum_absolute_gain=2.0, ci_method="bootstrap").evaluate(base, cand, higher_is_better=False)
+    u = corrected.uplift
+    assert u.ci_method == "nadeau_bengio" and (u.ci_high - u.ci_low) > (u.bootstrap_ci_high - u.bootstrap_ci_low)
+    assert u.p_value < 0.05 and u.ci_low < 0  # one-sided p is small but the two-sided interval touches zero
+    assert corrected.decision == INCONCLUSIVE and naive.decision == KEEP
+    # a candidate with no variance in its uplift is decided without a degenerate interval
+    flat = ExperimentJudge().evaluate([10.0, 10.0, 10.0], [8.0, 8.0, 8.0], higher_is_better=False)
+    assert flat.decision == KEEP and flat.uplift.ci_low == pytest.approx(2.0)
+
+
+def test_benjamini_hochberg_downgrades_lucky_candidates():
+    from automl_py.judge import benjamini_hochberg
+
+    assert benjamini_hochberg([0.001, 0.02, 0.04, 0.5], q=0.05) == [True, True, False, False]
+    judge = ExperimentJudge()
+    base = [10.0, 10.0, 10.0, 10.0, 10.0]
+    strong = judge.evaluate(base, [7.0, 7.2, 6.9, 7.1, 7.0], higher_is_better=False)
+    weak = judge.evaluate(base, [9.0, 9.6, 8.9, 9.7, 9.3], higher_is_better=False)
+    assert strong.decision == KEEP and weak.decision == KEEP
+    many = [judge.evaluate(base, [9.0, 9.6, 8.9, 9.7, 9.3], higher_is_better=False) for _ in range(30)]
+    survivors = judge.control_false_discoveries([strong, weak, *many], q=0.001)
+    assert survivors[0] is True and strong.decision == KEEP
+    assert weak.decision == INCONCLUSIVE and "Benjamini-Hochberg" in weak.reasons[-1]
 
 
 def test_judge_requires_identical_folds():

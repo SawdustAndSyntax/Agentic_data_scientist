@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.11.0 — Rigor, search budget, real candidate sources, the report
+### Statistics
+- The Experiment Judge's default interval is the **Nadeau–Bengio corrected paired t-interval** (variance inflated by 1/K + n_test/n_train for dependent folds) with a one-sided p-value; the percentile bootstrap is still reported and selectable (`uplift_ci_method`).
+- **Benjamini–Hochberg** control across the candidates of one iteration (`ExperimentJudge.control_false_discoveries`); candidates that do not survive are downgraded to INCONCLUSIVE with the reason recorded.
+- The orchestrator now runs **forward selection**: every queued candidate is judged against the same baseline, BH is applied, the best survivor is adopted (`adopt_per_iteration`), the rest are re-tested against the new baseline. KEEP-but-not-adopted results are recorded with `adopted=False`.
+
+### Search budget
+- Two-stage search: every configuration is screened untuned on the first fold and only the top `screen_top_k` receive full validation and tuning (`screen_configurations`). `max_search_seconds` stops starting new configurations; skipped ones are recorded (`stage` and `screen_score` columns in `results.csv`, diagnostics entries).
+
+### Candidate sources
+- `DerivedFeatureSource` turns derivable hypotheses into tested candidates: nonlinear transforms, low-redundancy interactions, and for temporal problems lags and rolling means that only use past periods.
+- `DiscoveryCandidateSource` bridges `DataDiscoveryAgent` into the loop with an injected loader; `PointInTimeJoiner` performs as-of joins with an availability lag; `key_join` surfaces one-to-many joins as ROW_EXPLOSION at the gate. `CompositeCandidateSource` combines sources. `LoopState` now carries the development frame, timestamps and groups.
+
+### Report and reproducibility
+- `render_report` / `save_report` produce the auditable Markdown narrative (validation design, baseline, diagnosis, judged experiments with reasons, kept candidates, single holdout number, stop reason, Value of Information); `build_manifest` records versions, seed, config and a data fingerprint. Written automatically as `report.md` / `manifest.json`.
+
+### Optional reasoner
+- `AnthropicHypothesisReasoner` (extra `[llm]`) implements the `HypothesisReasoner` hook with the Anthropic SDK. It may re-rank and add hypotheses that cite provided fact ids; uncited proposals are rejected, confidence is capped, refusals/failures leave hypotheses unchanged, and it can never decide KEEP.
+
+
 ## 0.10.0 — Scientific Integrity & Autonomous Loop
 Corrective sprint: the implementation now supports the claims the architecture makes.
 

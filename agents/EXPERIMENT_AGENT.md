@@ -7,7 +7,8 @@ Determine whether candidate information produces stable, out-of-sample predictiv
 
 ## How it works today
 - Baseline and candidate are scored on the **identical `FoldSet`** materialized from the configured `ValidationStrategy` (random, stratified, group, rolling-origin, expanding, sliding).
-- Paired fold differences feed the **`ExperimentJudge`**: mean, median, std, positive-fold share, bootstrap confidence interval, worst/best fold.
+- Paired fold differences feed the **`ExperimentJudge`**: mean, median, std, positive-fold share, Nadeau–Bengio corrected confidence interval and p-value (bootstrap reported alongside), worst/best fold.
+- Within one loop iteration all candidates are judged against the same baseline and **Benjamini–Hochberg** control is applied before adoption (forward selection).
 - **Noise controls** (random and permuted features on the same folds) set an empirical floor; `minimum_feature_gain` / `minimum_relative_gain` set the practical floor. The larger wins.
 - **Validity gates run before training**: temporal availability (`unavailable` → INVALID, `unknown` → review), join validity (`ROW_EXPLOSION`, `LOW_COVERAGE` → INVALID), governance.
 - The **final holdout is locked**: never read for candidate comparison, evaluated once for the final champion.

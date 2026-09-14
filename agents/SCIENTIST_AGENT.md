@@ -1,6 +1,6 @@
 # Predictive Scientist Agent
 
-Status: **IMPLEMENTED** for baseline modelling, diagnostics and evidence-backed hypothesis generation (`automl_py.scientist`, `automl_py.autonomous`, `automl_py.hypotheses`). LLM-assisted reasoning is **PLANNED** behind the `HypothesisReasoner` hook.
+Status: **IMPLEMENTED** for baseline modelling, diagnostics and evidence-backed hypothesis generation (`automl_py.scientist`, `automl_py.autonomous`, `automl_py.hypotheses`). LLM-assisted reasoning is **EXPERIMENTAL** via `AnthropicHypothesisReasoner` (must cite provided facts; cannot decide KEEP).
 
 ## Mission
 Build the strongest defensible out-of-sample prediction while avoiding leakage, unstable signal, and misleading evaluation.

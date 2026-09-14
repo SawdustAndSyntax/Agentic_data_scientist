@@ -156,7 +156,7 @@ class ExperimentMemory:
                 return True, f"{INVALID} in {invalid[-1].experiment_id}: {'; '.join(invalid[-1].reasons)[:120]}"
             if prior_c:
                 last = prior_c[-1]
-                if last.decision in {KEEP, REVIEW}:
+                if last.decision in {KEEP, REVIEW} and last.extra.get("adopted", True):
                     return True, f"already {last.decision} in {last.experiment_id}"
                 if last.failed and (evidence_hash is None or last.evidence_hash == evidence_hash):
                     return True, f"{last.decision} in {last.experiment_id} with identical evidence"

@@ -1,6 +1,6 @@
 # Predictive Discovery Orchestrator
 
-Status: **IMPLEMENTED** (`automl_py.orchestrator.PredictiveDiscoveryOrchestrator`). Warehouse-backed candidate sources are **EXPERIMENTAL** (the in-memory source is tested; `PredictiveDiscoveryLoop` bridges catalog candidates with injected loaders).
+Status: **IMPLEMENTED** (`automl_py.orchestrator.PredictiveDiscoveryOrchestrator`). Candidate sources: `InMemoryCandidateSource`, `DerivedFeatureSource`, `DiscoveryCandidateSource` (catalog → loader → point-in-time join) and `CompositeCandidateSource`; live-warehouse loaders are **EXPERIMENTAL**.
 
 ## Loop (as executed)
 ```python
@@ -11,9 +11,10 @@ while not stop:
     for request in queue:
         gate: availability, join coverage / explosion, governance -> INVALID before training
         result  = paired experiment on identical folds (+ noise controls)
-        verdict = judge.evaluate(result)
-        memory.record(...)                                   # KEEP, REJECT, INCONCLUSIVE, INVALID, REVIEW
-        KEEP -> adopt columns, rebase baseline
+        verdict = judge.evaluate(result)                     # Nadeau-Bengio corrected CI, p-value
+    judge.control_false_discoveries(all verdicts this iteration)   # Benjamini-Hochberg
+    memory.record(every result)                              # KEEP, REJECT, INCONCLUSIVE, INVALID, REVIEW
+    adopt the best surviving KEEP (forward selection), rebase baseline, re-test the rest next iteration
 lock final feature set -> evaluate the locked holdout once -> model card
 ```
 `AutoMLConfig.autonomous_rounds` is the iteration limit; `StopConfig` refines it.

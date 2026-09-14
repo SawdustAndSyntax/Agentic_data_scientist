@@ -47,7 +47,19 @@ from .features import (
 from .holdout import FinalHoldout, HoldoutAlreadyEvaluated, HoldoutEvaluation, HoldoutLocked
 from .hypotheses import Diagnosis, Hypothesis, HypothesisGenerator, HypothesisReasoner
 from .information_portfolio import optimize_information_portfolio
-from .judge import DECISIONS, INCONCLUSIVE, INVALID, KEEP, REJECT, REVIEW, ExperimentJudge, ExperimentVerdict, PairedUplift, paired_uplift
+from .judge import (
+    DECISIONS,
+    INCONCLUSIVE,
+    INVALID,
+    KEEP,
+    REJECT,
+    REVIEW,
+    ExperimentJudge,
+    ExperimentVerdict,
+    PairedUplift,
+    benjamini_hochberg,
+    paired_uplift,
+)
 from .leakage import LeakageDetector
 from .memory import ExperimentMemory, ExperimentRecord
 from .missingness import MissingnessAnalyzer
@@ -64,8 +76,10 @@ from .orchestrator import (
 )
 from .planner import ExperimentRecommendation, NextExperimentPlanner
 from .profiling import DataProfiler
+from .report import build_manifest, render_report, save_report
 from .residuals import regression_residual_diagnostics
 from .scientist import AutoMLScientist, ScientistResult
+from .sources import CandidateData, CompositeCandidateSource, DerivedFeatureSource, DiscoveryCandidateSource, PointInTimeJoiner, key_join
 from .stability import model_stability
 from .temporal import AVAILABLE, UNAVAILABLE, UNKNOWN, FeatureAvailability, FeatureAvailabilityRegistry, FeatureMetadata
 from .uncertainty import ConformalPrediction, SplitConformalRegressor
@@ -108,8 +122,10 @@ __all__ = [
     "AutonomousAutoMLScientist",
     "AutonomousScientistResult",
     "BusinessValueModel",
+    "CandidateData",
     "CandidateFeatureSet",
     "CandidateSource",
+    "CompositeCandidateSource",
     "ConformalPrediction",
     "DataCost",
     "DataDiscoveryAgent",
@@ -117,10 +133,12 @@ __all__ = [
     "DatabricksCatalogAdapter",
     "DatasetCandidate",
     "DateTimeFeatures",
+    "DerivedFeatureSource",
     "Diagnosis",
     "DiagnosticEvent",
     "DiagnosticLog",
     "DiscoveryBudget",
+    "DiscoveryCandidateSource",
     "DiscoveryRequest",
     "EmbeddingRelevanceProvider",
     "ExpandingWindow",
@@ -161,6 +179,7 @@ __all__ = [
     "NextExperimentPlanner",
     "OrchestratorResult",
     "PairedUplift",
+    "PointInTimeJoiner",
     "PredictiveDiscoveryLoop",
     "PredictiveDiscoveryOrchestrator",
     "RandomKFold",
@@ -186,6 +205,8 @@ __all__ = [
     "add_noise_controls",
     "add_rolling_features",
     "adversarial_validation",
+    "benjamini_hochberg",
+    "build_manifest",
     "build_strategy",
     "compare_candidate_datasets",
     "development_holdout_split",
@@ -193,6 +214,7 @@ __all__ = [
     "feature_family_value",
     "fold_scores",
     "judge_from_config",
+    "key_join",
     "make_feature_selector",
     "make_pca",
     "materialize_folds",
@@ -202,5 +224,7 @@ __all__ = [
     "paired_uplift",
     "pipeline_factory",
     "regression_residual_diagnostics",
+    "render_report",
     "run_paired_experiment",
+    "save_report",
 ]

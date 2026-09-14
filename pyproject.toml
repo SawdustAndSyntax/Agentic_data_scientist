@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "automl-py"
-version = "0.10.0"
+version = "0.11.0"
 description = "Predictive Discovery Engine: autonomous modeling plus governed semantic data discovery and experimentation."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,6 +21,8 @@ dependencies = [
 boost = ["xgboost>=2.1", "lightgbm>=4.5", "catboost>=1.2"]
 # IMPLEMENTED: MLflow run logging for the champion (AutoMLConfig.enable_mlflow).
 tracking = ["mlflow>=2.17"]
+# EXPERIMENTAL: optional LLM hypothesis reasoner (AnthropicHypothesisReasoner); never required by the core.
+llm = ["anthropic>=1.0"]
 dev = ["pytest>=8.0", "ruff>=0.8"]
 # REMOVED in 0.10: "explain" (shap) and "tuning" (optuna) extras were never consumed by the code.
 

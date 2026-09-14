@@ -11,8 +11,10 @@ from .ablation import feature_ablation
 from .config import AutoMLConfig
 from .diagnostics import DiagnosticLog
 from .experiments import feature_family_value, judge_from_config
+from .hypotheses import HypothesisGenerator, HypothesisReasoner
 from .orchestrator import OrchestratorResult, PredictiveDiscoveryOrchestrator, StopConfig
 from .planner import NextExperimentPlanner
+from .report import build_manifest, save_report
 from .scientist import AutoMLScientist, ScientistResult
 from .stability import model_stability
 from .temporal import FeatureAvailabilityRegistry
@@ -83,6 +85,7 @@ class AutonomousAutoMLScientist:
         candidate_source=None,
         stop: StopConfig | None = None,
         prediction_time=None,
+        reasoner: HypothesisReasoner | None = None,
     ):
         self.config = config or AutoMLConfig()
         self.context = context
@@ -91,6 +94,7 @@ class AutonomousAutoMLScientist:
         self.candidate_source = candidate_source
         self.stop = stop
         self.prediction_time = prediction_time
+        self.reasoner = reasoner
         self.result_ = None
 
     def fit(self, data: pd.DataFrame, target_names: str | list[str]):
@@ -207,6 +211,7 @@ class AutonomousAutoMLScientist:
                 candidate_source=self.candidate_source,
                 feature_availability=self.feature_availability,
                 judge=judge,
+                hypothesis_generator=HypothesisGenerator(reasoner=self.reasoner) if self.reasoner is not None else None,
                 stop=self.stop,
                 diagnostics=diagnostics,
                 prediction_time=self.prediction_time,
@@ -236,4 +241,6 @@ class AutonomousAutoMLScientist:
             (out / "uncertainty_summary.json").write_text(json.dumps(uncertainty, indent=2))
         (out / "autonomous_summary.txt").write_text(result.summary())
         diagnostics.to_frame().to_csv(out / "diagnostics.csv", index=False)
+        with diagnostics.capture("report"):
+            save_report(result, out, manifest=build_manifest(c, df, context=self.context))
         return result

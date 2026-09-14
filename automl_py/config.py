@@ -50,6 +50,12 @@ class AutoMLConfig:
     pca_variance: float = 0.95
     tune: bool = True
     max_candidates_per_model: int = 16
+    # Search budget: screen every configuration untuned on the first fold, run full
+    # validation + tuning only on the top ``screen_top_k``; stop starting new
+    # configurations once ``max_search_seconds`` has elapsed (the first survivor always runs).
+    screen_configurations: bool = True
+    screen_top_k: int = 8
+    max_search_seconds: float | None = None
 
     # Scientist diagnostics -----------------------------------------------------
     run_data_profile: bool = True
@@ -70,10 +76,12 @@ class AutoMLConfig:
     noise_controls: int = 5  # number of random/permuted control features when run_noise_controls
     noise_quantile: float = 0.95
     uplift_ci_level: float = 0.95
+    uplift_ci_method: Literal["nadeau_bengio", "bootstrap"] = "nadeau_bengio"  # corrected for fold dependence by default
     min_positive_fold_share: float = 0.6
 
     # Autonomous loop -----------------------------------------------------------
     autonomous_rounds: int = 1  # maximum orchestrator iterations when a candidate source is supplied
+    adopt_per_iteration: int = 1  # forward selection: adopt the best BH-surviving candidate, re-test the rest
     max_experiments: int = 50
     no_improvement_rounds: int = 3
     stability_repeats: int = 8
