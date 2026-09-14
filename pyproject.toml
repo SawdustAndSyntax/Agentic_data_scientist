@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "automl-py"
+version = "0.9.0"
+description = "Predictive Discovery Engine: autonomous modeling plus governed semantic data discovery and experimentation."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "scikit-learn>=1.5",
+  "joblib>=1.4",
+  "matplotlib>=3.9",
+]
+
+[project.optional-dependencies]
+boost = ["xgboost>=2.1", "lightgbm>=4.5", "catboost>=1.2"]
+explain = ["shap>=0.46"]
+tracking = ["mlflow>=2.17"]
+tuning = ["optuna>=4.0"]
+dev = ["pytest>=8.0", "ruff>=0.8"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["automl_py*"]
+
+[tool.ruff]
+line-length = 140
