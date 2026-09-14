@@ -15,35 +15,90 @@ from .experiments import FeatureExperiment, feature_family_value, compare_candid
 from .planner import NextExperimentPlanner, ExperimentRecommendation
 from .temporal import FeatureAvailability, FeatureAvailabilityRegistry
 from .features import (
-    RatioFeatures, RowStatistics, GroupStatisticsEncoder, DateTimeFeatures,
-    add_lag_features, add_rolling_features, make_pca, make_feature_selector,
+    RatioFeatures,
+    RowStatistics,
+    GroupStatisticsEncoder,
+    DateTimeFeatures,
+    add_lag_features,
+    add_rolling_features,
+    make_pca,
+    make_feature_selector,
 )
+
+from .discovery_agent import (
+    SemanticField,
+    SemanticEntity,
+    SemanticRelationship,
+    DiscoveryRequest,
+    JoinPlan,
+    DatasetCandidate,
+    SemanticGraph,
+    DataDiscoveryAgent,
+    JoinValidator,
+    DiscoveryBudget,
+    PredictiveDiscoveryLoop,
+    SnowflakeCatalogAdapter,
+    DatabricksCatalogAdapter,
+    InMemoryCatalogAdapter,
+)
+from .value_of_information import BusinessValueModel, DataCost, ValueOfInformationEngine, ValueOfInformationResult
+from .information_portfolio import optimize_information_portfolio
+from .external_discovery import ExternalDatasetCandidate, ExternalCatalogProvider, ExternalSignalScout
 
 __all__ = [
-    'AutoML','AutoMLResult','AutoMLConfig','AutoMLScientist','ScientistResult',
-    'AutonomousAutoMLScientist','AutonomousScientistResult',
-    'DataProfiler','MissingnessAnalyzer','LeakageDetector','FeatureDiscovery',
-    'adversarial_validation','feature_ablation','add_noise_controls',
-    'regression_residual_diagnostics','model_stability','SplitConformalRegressor',
-    'ConformalPrediction','FeatureExperiment','feature_family_value',
-    'compare_candidate_datasets','NextExperimentPlanner','ExperimentRecommendation',
-    'FeatureAvailability','FeatureAvailabilityRegistry','RatioFeatures','RowStatistics',
-    'GroupStatisticsEncoder','DateTimeFeatures','add_lag_features','add_rolling_features',
-    'make_pca','make_feature_selector'
-    ,'SemanticField','SemanticEntity','SemanticRelationship','DiscoveryRequest','JoinPlan','DatasetCandidate','SemanticGraph','DataDiscoveryAgent','JoinValidator','DiscoveryBudget','PredictiveDiscoveryLoop','SnowflakeCatalogAdapter','DatabricksCatalogAdapter','InMemoryCatalogAdapter'
+    "AutoML",
+    "AutoMLResult",
+    "AutoMLConfig",
+    "AutoMLScientist",
+    "ScientistResult",
+    "AutonomousAutoMLScientist",
+    "AutonomousScientistResult",
+    "DataProfiler",
+    "MissingnessAnalyzer",
+    "LeakageDetector",
+    "FeatureDiscovery",
+    "adversarial_validation",
+    "feature_ablation",
+    "add_noise_controls",
+    "regression_residual_diagnostics",
+    "model_stability",
+    "SplitConformalRegressor",
+    "ConformalPrediction",
+    "FeatureExperiment",
+    "feature_family_value",
+    "compare_candidate_datasets",
+    "NextExperimentPlanner",
+    "ExperimentRecommendation",
+    "FeatureAvailability",
+    "FeatureAvailabilityRegistry",
+    "RatioFeatures",
+    "RowStatistics",
+    "GroupStatisticsEncoder",
+    "DateTimeFeatures",
+    "add_lag_features",
+    "add_rolling_features",
+    "make_pca",
+    "make_feature_selector",
+    "SemanticField",
+    "SemanticEntity",
+    "SemanticRelationship",
+    "DiscoveryRequest",
+    "JoinPlan",
+    "DatasetCandidate",
+    "SemanticGraph",
+    "DataDiscoveryAgent",
+    "JoinValidator",
+    "DiscoveryBudget",
+    "PredictiveDiscoveryLoop",
+    "SnowflakeCatalogAdapter",
+    "DatabricksCatalogAdapter",
+    "InMemoryCatalogAdapter",
+    "BusinessValueModel",
+    "DataCost",
+    "ValueOfInformationEngine",
+    "ValueOfInformationResult",
+    "optimize_information_portfolio",
+    "ExternalDatasetCandidate",
+    "ExternalCatalogProvider",
+    "ExternalSignalScout",
 ]
-from .discovery_agent import (
-    SemanticField, SemanticEntity, SemanticRelationship, DiscoveryRequest, JoinPlan,
-    DatasetCandidate, SemanticGraph, DataDiscoveryAgent, JoinValidator,
-    DiscoveryBudget, PredictiveDiscoveryLoop, SnowflakeCatalogAdapter,
-    DatabricksCatalogAdapter, InMemoryCatalogAdapter,
-)
-
-
-from .value_of_information import (
-    BusinessValueModel, DataCost, ValueOfInformationEngine, ValueOfInformationResult
-)
-from .information_portfolio import optimize_information_portfolio
-from .external_discovery import (
-    ExternalDatasetCandidate, ExternalCatalogProvider, ExternalSignalScout
-)

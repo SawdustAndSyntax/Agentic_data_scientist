@@ -27,54 +27,55 @@ class ExternalCatalogProvider(Protocol):
 
     Core AutoML-Py never silently purchases or ingests external data.
     """
+
     def search(
         self,
         query: str,
         concepts: Sequence[str] = (),
         limit: int = 20,
-    ) -> list[ExternalDatasetCandidate]:
-        ...
+    ) -> list[ExternalDatasetCandidate]: ...
 
 
 class ExternalSignalScout:
     def __init__(self, providers: Sequence[ExternalCatalogProvider]):
         self.providers = list(providers)
 
-    def search(self, hypothesis: str, concepts: Sequence[str] = (),
-               limit_per_provider: int = 10) -> pd.DataFrame:
+    def search(self, hypothesis: str, concepts: Sequence[str] = (), limit_per_provider: int = 10) -> pd.DataFrame:
         rows = []
         for provider in self.providers:
             try:
-                candidates = provider.search(
-                    hypothesis, concepts=concepts, limit=limit_per_provider
-                )
+                candidates = provider.search(hypothesis, concepts=concepts, limit=limit_per_provider)
             except Exception as exc:
-                rows.append({
-                    "provider": type(provider).__name__,
-                    "dataset_id": None,
-                    "name": None,
-                    "description": None,
-                    "concepts": None,
-                    "annual_cost_estimate": None,
-                    "status": "provider_error",
-                    "error": f"{type(exc).__name__}: {exc}",
-                })
+                rows.append(
+                    {
+                        "provider": type(provider).__name__,
+                        "dataset_id": None,
+                        "name": None,
+                        "description": None,
+                        "concepts": None,
+                        "annual_cost_estimate": None,
+                        "status": "provider_error",
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                )
                 continue
 
             for c in candidates:
-                rows.append({
-                    "provider": c.provider,
-                    "dataset_id": c.dataset_id,
-                    "name": c.name,
-                    "description": c.description,
-                    "concepts": ", ".join(c.concepts),
-                    "geographic_grain": c.geographic_grain,
-                    "temporal_grain": c.temporal_grain,
-                    "historical_start": c.historical_start,
-                    "historical_end": c.historical_end,
-                    "annual_cost_estimate": c.annual_cost_estimate,
-                    "url": c.url,
-                    "status": "candidate",
-                    "error": None,
-                })
+                rows.append(
+                    {
+                        "provider": c.provider,
+                        "dataset_id": c.dataset_id,
+                        "name": c.name,
+                        "description": c.description,
+                        "concepts": ", ".join(c.concepts),
+                        "geographic_grain": c.geographic_grain,
+                        "temporal_grain": c.temporal_grain,
+                        "historical_start": c.historical_start,
+                        "historical_end": c.historical_end,
+                        "annual_cost_estimate": c.annual_cost_estimate,
+                        "url": c.url,
+                        "status": "candidate",
+                        "error": None,
+                    }
+                )
         return pd.DataFrame(rows)

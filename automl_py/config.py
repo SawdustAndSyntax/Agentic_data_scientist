@@ -2,23 +2,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Sequence
 
-Task = Literal['regression','classification']
-Metric = Literal['r2','rmse','mae','accuracy','roc_auc','f1']
-Preprocess = Literal['original','scale','pca']
-ImputationStrategy = Literal['median','mean','most_frequent','knn','iterative']
+Task = Literal["regression", "classification"]
+Metric = Literal["r2", "rmse", "mae", "accuracy", "roc_auc", "f1"]
+Preprocess = Literal["original", "scale", "pca"]
+ImputationStrategy = Literal["median", "mean", "most_frequent", "knn", "iterative"]
+
 
 @dataclass(slots=True)
 class AutoMLConfig:
-    task: Task = 'regression'
+    task: Task = "regression"
     metric: Metric | None = None
-    preprocessors: Sequence[Preprocess] = ('original','scale','pca')
+    preprocessors: Sequence[Preprocess] = ("original", "scale", "pca")
     models: Sequence[str] | None = None
-    imputation_strategies: Sequence[ImputationStrategy] = ('median',)
+    imputation_strategies: Sequence[ImputationStrategy] = ("median",)
     add_missing_indicators: bool = True
     interaction_terms: bool = False
     interaction_degree: int = 2
-    feature_selection: Sequence[str] = ('none',)
-    feature_selection_k: int | str = 'all'
+    feature_selection: Sequence[str] = ("none",)
+    feature_selection_k: int | str = "all"
     test_size: float = 0.20
     random_state: int = 100
     cv_folds: int = 5
@@ -48,9 +49,9 @@ class AutoMLConfig:
     temporal_strict: bool = True
 
     save_models: bool = True
-    artifact_dir: str = 'automl_artifacts'
+    artifact_dir: str = "automl_artifacts"
     enable_mlflow: bool = False
-    mlflow_experiment: str = 'AutoML Scientist'
+    mlflow_experiment: str = "AutoML Scientist"
 
     def resolved_metric(self) -> Metric:
-        return self.metric or ('accuracy' if self.task == 'classification' else 'r2')
+        return self.metric or ("accuracy" if self.task == "classification" else "r2")

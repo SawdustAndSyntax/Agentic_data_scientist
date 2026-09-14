@@ -1,10 +1,74 @@
 import pandas as pd
-LIB={'weather':(['weather','temperature','temp','rain','precipitation','snow','humidity','wind'],'Environmental conditions can alter demand, traffic, failures, or operations.','location × time'),'calendar':(['holiday','weekday','weekend','month','season','school','payday'],'Calendar structure often drives recurring demand and seasonality.','date / region × date'),'price_promotion':(['price','promotion','promo','discount','coupon'],'Price and promotions often explain demand changes history alone cannot.','item × location × time'),'inventory_availability':(['inventory','stock','availability','oos','backorder'],'Observed sales may be censored by stock availability.','item × location × time'),'events':(['event','concert','game','festival','conference'],'Local events can create temporary traffic and demand shocks.','location × date'),'mobility_traffic':(['traffic','footfall','foot_traffic','mobility','visits'],'Traffic provides a leading indicator of customer opportunity.','location × time'),'economy':(['income','unemployment','inflation','cpi','gdp','interest','consumer'],'Macroeconomic conditions can explain broad demand regimes.','region × month/quarter'),'competitor':(['competitor','competitive','market_price','share'],'Competitive pricing and availability may explain demand movements.','market/item × time')}
+
+LIB = {
+    "weather": (
+        ["weather", "temperature", "temp", "rain", "precipitation", "snow", "humidity", "wind"],
+        "Environmental conditions can alter demand, traffic, failures, or operations.",
+        "location × time",
+    ),
+    "calendar": (
+        ["holiday", "weekday", "weekend", "month", "season", "school", "payday"],
+        "Calendar structure often drives recurring demand and seasonality.",
+        "date / region × date",
+    ),
+    "price_promotion": (
+        ["price", "promotion", "promo", "discount", "coupon"],
+        "Price and promotions often explain demand changes history alone cannot.",
+        "item × location × time",
+    ),
+    "inventory_availability": (
+        ["inventory", "stock", "availability", "oos", "backorder"],
+        "Observed sales may be censored by stock availability.",
+        "item × location × time",
+    ),
+    "events": (
+        ["event", "concert", "game", "festival", "conference"],
+        "Local events can create temporary traffic and demand shocks.",
+        "location × date",
+    ),
+    "mobility_traffic": (
+        ["traffic", "footfall", "foot_traffic", "mobility", "visits"],
+        "Traffic provides a leading indicator of customer opportunity.",
+        "location × time",
+    ),
+    "economy": (
+        ["income", "unemployment", "inflation", "cpi", "gdp", "interest", "consumer"],
+        "Macroeconomic conditions can explain broad demand regimes.",
+        "region × month/quarter",
+    ),
+    "competitor": (
+        ["competitor", "competitive", "market_price", "share"],
+        "Competitive pricing and availability may explain demand movements.",
+        "market/item × time",
+    ),
+}
+
+
 class FeatureDiscovery:
-    def opportunities(self,columns,target,context=''):
-        text=f'{target} {context}'.lower(); cols=' '.join(map(str,columns)).lower(); demand=any(k in text for k in ['sales','demand','revenue','volume','traffic','orders'])
-        out=[]
-        for concept,(terms,why,grain) in LIB.items():
-            present=any(t in cols for t in terms); priority='high' if demand and concept in {'weather','calendar','price_promotion','inventory_availability','events','mobility_traffic'} else 'medium'; priority='present' if present else priority
-            out.append({'concept':concept,'present':present,'priority':priority,'rationale':why,'typical_grain':grain,'status':'available' if present else 'candidate missing signal'})
-        order={'high':0,'medium':1,'low':2,'present':3}; df=pd.DataFrame(out); df['_o']=df.priority.map(order).fillna(9); return df.sort_values(['_o','concept']).drop(columns='_o').reset_index(drop=True)
+    def opportunities(self, columns, target, context=""):
+        text = f"{target} {context}".lower()
+        cols = " ".join(map(str, columns)).lower()
+        demand = any(k in text for k in ["sales", "demand", "revenue", "volume", "traffic", "orders"])
+        out = []
+        for concept, (terms, why, grain) in LIB.items():
+            present = any(t in cols for t in terms)
+            priority = (
+                "high"
+                if demand and concept in {"weather", "calendar", "price_promotion", "inventory_availability", "events", "mobility_traffic"}
+                else "medium"
+            )
+            priority = "present" if present else priority
+            out.append(
+                {
+                    "concept": concept,
+                    "present": present,
+                    "priority": priority,
+                    "rationale": why,
+                    "typical_grain": grain,
+                    "status": "available" if present else "candidate missing signal",
+                }
+            )
+        order = {"high": 0, "medium": 1, "low": 2, "present": 3}
+        df = pd.DataFrame(out)
+        df["_o"] = df.priority.map(order).fillna(9)
+        return df.sort_values(["_o", "concept"]).drop(columns="_o").reset_index(drop=True)

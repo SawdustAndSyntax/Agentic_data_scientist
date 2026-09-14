@@ -1,4 +1,3 @@
-import pandas as pd
 from automl_py import (
     DataDiscoveryAgent,
     DiscoveryRequest,
@@ -23,8 +22,11 @@ weather = SemanticEntity(
     fields=[SemanticField("store_id", role="key"), SemanticField("temperature")],
 )
 relationship = SemanticRelationship(
-    "sales_weather", "analytics.public.sales", "external.weather.daily",
-    ("store_id",), ("store_id",),
+    "sales_weather",
+    "analytics.public.sales",
+    "external.weather.daily",
+    ("store_id",),
+    ("store_id",),
 )
 adapter = InMemoryCatalogAdapter([sales, weather], [relationship])
 agent = DataDiscoveryAgent(adapter)

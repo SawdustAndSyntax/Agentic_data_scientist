@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import Callable, Mapping
-import numpy as np
+from typing import Mapping
 import pandas as pd
 
 
@@ -26,6 +25,7 @@ class BusinessValueModel:
     annual_compute_cost:
         Incremental annual serving/retraining cost attributable to this feature.
     """
+
     value_per_error_unit: float = 0.0
     annual_decisions: float = 1.0
     realization_rate: float = 1.0
@@ -51,20 +51,11 @@ class DataCost:
 
     @property
     def first_year_cost(self) -> float:
-        return (
-            self.annual_license_cost
-            + self.one_time_integration_cost
-            + self.annual_maintenance_cost
-            + self.annual_compute_cost
-        )
+        return self.annual_license_cost + self.one_time_integration_cost + self.annual_maintenance_cost + self.annual_compute_cost
 
     @property
     def recurring_annual_cost(self) -> float:
-        return (
-            self.annual_license_cost
-            + self.annual_maintenance_cost
-            + self.annual_compute_cost
-        )
+        return self.annual_license_cost + self.annual_maintenance_cost + self.annual_compute_cost
 
 
 @dataclass(frozen=True)
@@ -118,15 +109,9 @@ class ValueOfInformationEngine:
             improvement_abs = baseline_score - candidate_score
             denom = abs(baseline_score)
 
-        improvement_pct = (
-            improvement_abs / denom if denom > 1e-12 else 0.0
-        )
+        improvement_pct = improvement_abs / denom if denom > 1e-12 else 0.0
 
-        annual_value = max(0.0, improvement_abs) * (
-            business.value_per_error_unit
-            * business.annual_decisions
-            * business.realization_rate
-        )
+        annual_value = max(0.0, improvement_abs) * (business.value_per_error_unit * business.annual_decisions * business.realization_rate)
 
         first_cost = cost.first_year_cost + business.annual_compute_cost
         recurring_cost = cost.recurring_annual_cost + business.annual_compute_cost
@@ -134,12 +119,8 @@ class ValueOfInformationEngine:
         first_net = annual_value - first_cost
         recurring_net = annual_value - recurring_cost
 
-        first_roi = (
-            first_net / first_cost if first_cost > 0 else None
-        )
-        recurring_roi = (
-            recurring_net / recurring_cost if recurring_cost > 0 else None
-        )
+        first_roi = first_net / first_cost if first_cost > 0 else None
+        recurring_roi = recurring_net / recurring_cost if recurring_cost > 0 else None
 
         if annual_value > 0 and first_cost > 0:
             payback_months = 12.0 * first_cost / annual_value
@@ -207,7 +188,11 @@ class ValueOfInformationEngine:
         if not rows:
             return pd.DataFrame()
 
-        return pd.DataFrame(rows).sort_values(
-            ["first_year_net_value", "improvement_pct"],
-            ascending=False,
-        ).reset_index(drop=True)
+        return (
+            pd.DataFrame(rows)
+            .sort_values(
+                ["first_year_net_value", "improvement_pct"],
+                ascending=False,
+            )
+            .reset_index(drop=True)
+        )

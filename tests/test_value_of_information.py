@@ -1,8 +1,6 @@
 import pandas as pd
 
-from automl_py.value_of_information import (
-    BusinessValueModel, DataCost, ValueOfInformationEngine
-)
+from automl_py.value_of_information import BusinessValueModel, DataCost, ValueOfInformationEngine
 from automl_py.information_portfolio import optimize_information_portfolio
 
 
@@ -33,7 +31,10 @@ def test_voi_lower_is_better():
 def test_voi_rejects_worse_candidate():
     engine = ValueOfInformationEngine(higher_is_better=False)
     result = engine.evaluate(
-        "events", 100, 101, "rmse",
+        "events",
+        100,
+        101,
+        "rmse",
         BusinessValueModel(value_per_error_unit=1000, annual_decisions=10),
         DataCost(annual_license_cost=100),
     )
@@ -42,11 +43,13 @@ def test_voi_rejects_worse_candidate():
 
 
 def test_portfolio_optimizer():
-    voi = pd.DataFrame([
-        {"candidate": "weather", "first_year_cost": 100, "first_year_net_value": 500},
-        {"candidate": "traffic", "first_year_cost": 150, "first_year_net_value": 600},
-        {"candidate": "events", "first_year_cost": 50, "first_year_net_value": 20},
-    ])
+    voi = pd.DataFrame(
+        [
+            {"candidate": "weather", "first_year_cost": 100, "first_year_net_value": 500},
+            {"candidate": "traffic", "first_year_cost": 150, "first_year_net_value": 600},
+            {"candidate": "events", "first_year_cost": 50, "first_year_net_value": 20},
+        ]
+    )
     out = optimize_information_portfolio(voi, annual_budget=200)
     assert out["selected"] == ["traffic", "events"] or out["selected"] == ["weather", "events"]
     # Actual optimum is weather+events=520 vs traffic+events=620, so:
