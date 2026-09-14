@@ -5,23 +5,48 @@ from sklearn.base import clone
 from sklearn.inspection import permutation_importance
 from sklearn.model_selection import train_test_split
 
+from .diagnostics import DiagnosticLog
 from .metrics import evaluate, scorer_name
+from .validation import FoldSet
 
 
 def model_stability(
-    model, X: pd.DataFrame, y, *, task: str, metric: str, repeats: int = 8, test_size: float = 0.2, random_state: int = 100, n_jobs: int = 1
+    model,
+    X: pd.DataFrame,
+    y,
+    *,
+    task: str,
+    metric: str,
+    repeats: int = 8,
+    test_size: float = 0.2,
+    random_state: int = 100,
+    n_jobs: int = 1,
+    folds: FoldSet | None = None,
+    diagnostics: DiagnosticLog | None = None,
 ) -> dict:
-    """Repeated holdout stability with permutation importance.
+    """Score and permutation-importance stability across resamples.
 
-    This measures whether score and feature importance remain consistent across different
-    train/test partitions. It is a robustness diagnostic, not a replacement for CV.
+    When ``folds`` is given (the shared development FoldSet) every resample is one
+    of those folds, so temporal problems are never scored on shuffled splits.
+    Otherwise repeated seeded holdouts are used, which is only appropriate for
+    exchangeable rows.
     """
+    diagnostics = diagnostics or DiagnosticLog(warn=False)
     score_rows = []
     importance = []
-    for i in range(repeats):
-        seed = random_state + i
-        strat = y if task == "classification" else None
-        Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=test_size, random_state=seed, stratify=strat)
+    if folds is not None:
+        partitions = [(i, f"fold{i + 1}", tr, te) for i, (tr, te) in enumerate(folds)]
+        source = folds.strategy_name
+    else:
+        partitions = []
+        for i in range(repeats):
+            seed = random_state + i
+            strat = y if task == "classification" else None
+            tr, te, _, _ = train_test_split(range(len(X)), range(len(X)), test_size=test_size, random_state=seed, stratify=strat)
+            partitions.append((i, f"seed{seed}", list(tr), list(te)))
+        source = "repeated_holdout"
+    for i, label, tr, te in partitions:
+        Xtr, Xte, ytr, yte = X.iloc[tr], X.iloc[te], y.iloc[tr], y.iloc[te]
         m = clone(model)
         m.fit(Xtr, ytr)
         yp = m.predict(Xte)
@@ -32,13 +57,11 @@ def model_stability(
             elif hasattr(m, "decision_function"):
                 prob = m.decision_function(Xte)
         score = evaluate(metric, yte, yp, prob)
-        score_rows.append({"repeat": i + 1, "seed": seed, "score": score})
-        try:
-            pi = permutation_importance(m, Xte, yte, scoring=scorer_name(metric), n_repeats=3, random_state=seed, n_jobs=n_jobs)
-            for feature, imp in zip(X.columns, pi.importances_mean):
+        score_rows.append({"repeat": i + 1, "partition": label, "score": score})
+        with diagnostics.capture("stability_importance", context=label):
+            pi = permutation_importance(m, Xte, yte, scoring=scorer_name(metric), n_repeats=3, random_state=random_state + i, n_jobs=n_jobs)
+            for feature, imp in zip(X.columns, pi.importances_mean, strict=True):
                 importance.append({"repeat": i + 1, "feature": feature, "importance": float(imp)})
-        except Exception:
-            pass
 
     scores = pd.DataFrame(score_rows)
     imp = pd.DataFrame(importance)
@@ -50,6 +73,8 @@ def model_stability(
         "coefficient_of_variation": float(abs(scores.score.std(ddof=1) / scores.score.mean()))
         if len(scores) > 1 and scores.score.mean() != 0
         else 0.0,
+        "source": source,
+        "n_partitions": len(scores),
     }
     if imp.empty:
         feature_summary = pd.DataFrame(columns=["feature", "importance_mean", "importance_std", "positive_share", "stability_score"])

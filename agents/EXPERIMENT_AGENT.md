@@ -1,28 +1,29 @@
 # Experiment Agent
 
+Status: **IMPLEMENTED** (`automl_py.experiments`, `automl_py.judge`, `automl_py.validation`, `automl_py.holdout`).
+
 ## Mission
 Determine whether candidate information produces stable, out-of-sample predictive improvement under a fair comparison.
 
-## Responsibilities
-- validate join coverage and cardinality;
-- enforce point-in-time availability;
-- create candidate feature family;
-- use identical validation splits for baseline and candidate;
-- measure absolute and relative uplift;
-- test stability;
-- preserve a pristine final holdout where configured;
-- reject candidates that fail join/data validity before modeling.
+## How it works today
+- Baseline and candidate are scored on the **identical `FoldSet`** materialized from the configured `ValidationStrategy` (random, stratified, group, rolling-origin, expanding, sliding).
+- Paired fold differences feed the **`ExperimentJudge`**: mean, median, std, positive-fold share, bootstrap confidence interval, worst/best fold.
+- **Noise controls** (random and permuted features on the same folds) set an empirical floor; `minimum_feature_gain` / `minimum_relative_gain` set the practical floor. The larger wins.
+- **Validity gates run before training**: temporal availability (`unavailable` → INVALID, `unknown` → review), join validity (`ROW_EXPLOSION`, `LOW_COVERAGE` → INVALID), governance.
+- The **final holdout is locked**: never read for candidate comparison, evaluated once for the final champion.
 
 ## Decision states
-- `KEEP` — reproducible improvement and acceptable validity/stability.
-- `REJECT` — no improvement or degradation.
-- `REVIEW` — promising but validity, stability, coverage, or cost is unresolved.
+- `KEEP` — mean uplift ≥ required gain, CI lower bound > 0, positive-fold share ≥ threshold, all validity gates passed.
+- `REJECT` — valid, but even the upper CI bound cannot reach the required gain.
+- `INCONCLUSIVE` — evidence too uncertain (CI includes zero, or too few folds).
+- `INVALID` — temporal, join, leakage, coverage or evaluation-design violation.
+- `REVIEW` — KEEP-level evidence with an unresolved availability, governance or cost question.
 
 ## Must not
-- select candidates from repeated final-holdout inspection;
-- compare experiments using inconsistent splits;
-- hide failed experiments;
-- call feature importance "incremental value."
+- select candidates from repeated final-holdout inspection (enforced: `HoldoutAlreadyEvaluated`);
+- compare experiments using inconsistent splits (enforced: the judge returns INVALID for mismatched folds);
+- hide failed experiments (every result is recorded in `ExperimentMemory`);
+- call feature importance "incremental value".
 
 ## Handoff
-Return `ExperimentResult` to the Scientist and Value Agent.
+Returns `ExperimentResult` (scores, verdict, validation strategy, noise uplifts) to the Scientist, memory and the Value Agent.

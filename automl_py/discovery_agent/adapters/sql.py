@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
+
+log = logging.getLogger("automl_py")
 
 
 class DBAPIExecutor:
@@ -23,5 +27,5 @@ class DBAPIExecutor:
         finally:
             try:
                 cur.close()
-            except Exception:
-                pass
+            except Exception:  # cursor already closed by the driver; nothing to recover
+                log.debug("cursor close failed", exc_info=True)

@@ -1,7 +1,8 @@
 from .ablation import add_noise_controls, feature_ablation
 from .autonomous import AutonomousAutoMLScientist, AutonomousScientistResult
 from .config import AutoMLConfig
-from .core import AutoML, AutoMLResult
+from .core import AutoML, AutoMLResult, pipeline_factory
+from .diagnostics import DiagnosticEvent, DiagnosticLog
 from .discovery import FeatureDiscovery
 from .discovery_agent import (
     DatabricksCatalogAdapter,
@@ -9,6 +10,8 @@ from .discovery_agent import (
     DatasetCandidate,
     DiscoveryBudget,
     DiscoveryRequest,
+    EmbeddingRelevanceProvider,
+    HybridRelevanceScorer,
     InMemoryCatalogAdapter,
     JoinPlan,
     JoinValidator,
@@ -20,7 +23,16 @@ from .discovery_agent import (
     SnowflakeCatalogAdapter,
 )
 from .drift import adversarial_validation
-from .experiments import FeatureExperiment, compare_candidate_datasets, feature_family_value
+from .experiments import (
+    ExperimentResult,
+    FeatureExperiment,
+    compare_candidate_datasets,
+    feature_family_value,
+    fold_scores,
+    judge_from_config,
+    noise_control_uplifts,
+    run_paired_experiment,
+)
 from .external_discovery import ExternalCatalogProvider, ExternalDatasetCandidate, ExternalSignalScout
 from .features import (
     DateTimeFeatures,
@@ -32,19 +44,63 @@ from .features import (
     make_feature_selector,
     make_pca,
 )
+from .holdout import FinalHoldout, HoldoutAlreadyEvaluated, HoldoutEvaluation, HoldoutLocked
+from .hypotheses import Diagnosis, Hypothesis, HypothesisGenerator, HypothesisReasoner
 from .information_portfolio import optimize_information_portfolio
+from .judge import DECISIONS, INCONCLUSIVE, INVALID, KEEP, REJECT, REVIEW, ExperimentJudge, ExperimentVerdict, PairedUplift, paired_uplift
 from .leakage import LeakageDetector
+from .memory import ExperimentMemory, ExperimentRecord
 from .missingness import MissingnessAnalyzer
+from .orchestrator import (
+    CandidateFeatureSet,
+    CandidateSource,
+    ExperimentBudget,
+    ExperimentQueue,
+    ExperimentRequest,
+    InMemoryCandidateSource,
+    OrchestratorResult,
+    PredictiveDiscoveryOrchestrator,
+    StopConfig,
+)
 from .planner import ExperimentRecommendation, NextExperimentPlanner
 from .profiling import DataProfiler
 from .residuals import regression_residual_diagnostics
 from .scientist import AutoMLScientist, ScientistResult
 from .stability import model_stability
-from .temporal import FeatureAvailability, FeatureAvailabilityRegistry
+from .temporal import AVAILABLE, UNAVAILABLE, UNKNOWN, FeatureAvailability, FeatureAvailabilityRegistry, FeatureMetadata
 from .uncertainty import ConformalPrediction, SplitConformalRegressor
-from .value_of_information import BusinessValueModel, DataCost, ValueOfInformationEngine, ValueOfInformationResult
+from .validation import (
+    ExpandingWindow,
+    FoldSet,
+    GroupKFold,
+    RandomKFold,
+    RollingOrigin,
+    SlidingWindow,
+    StratifiedKFold,
+    ValidationConfig,
+    ValidationStrategy,
+    build_strategy,
+    development_holdout_split,
+    materialize_folds,
+)
+from .value_of_information import (
+    BusinessValueModel,
+    DataCost,
+    UpliftNotEstablished,
+    ValueOfInformationEngine,
+    ValueOfInformationResult,
+)
 
 __all__ = [
+    "AVAILABLE",
+    "DECISIONS",
+    "INCONCLUSIVE",
+    "INVALID",
+    "KEEP",
+    "REJECT",
+    "REVIEW",
+    "UNAVAILABLE",
+    "UNKNOWN",
     "AutoML",
     "AutoMLConfig",
     "AutoMLResult",
@@ -52,6 +108,8 @@ __all__ = [
     "AutonomousAutoMLScientist",
     "AutonomousScientistResult",
     "BusinessValueModel",
+    "CandidateFeatureSet",
+    "CandidateSource",
     "ConformalPrediction",
     "DataCost",
     "DataDiscoveryAgent",
@@ -59,9 +117,22 @@ __all__ = [
     "DatabricksCatalogAdapter",
     "DatasetCandidate",
     "DateTimeFeatures",
+    "Diagnosis",
+    "DiagnosticEvent",
+    "DiagnosticLog",
     "DiscoveryBudget",
     "DiscoveryRequest",
+    "EmbeddingRelevanceProvider",
+    "ExpandingWindow",
+    "ExperimentBudget",
+    "ExperimentJudge",
+    "ExperimentMemory",
+    "ExperimentQueue",
     "ExperimentRecommendation",
+    "ExperimentRecord",
+    "ExperimentRequest",
+    "ExperimentResult",
+    "ExperimentVerdict",
     "ExternalCatalogProvider",
     "ExternalDatasetCandidate",
     "ExternalSignalScout",
@@ -69,35 +140,67 @@ __all__ = [
     "FeatureAvailabilityRegistry",
     "FeatureDiscovery",
     "FeatureExperiment",
+    "FeatureMetadata",
+    "FinalHoldout",
+    "FoldSet",
+    "GroupKFold",
     "GroupStatisticsEncoder",
+    "HoldoutAlreadyEvaluated",
+    "HoldoutEvaluation",
+    "HoldoutLocked",
+    "HybridRelevanceScorer",
+    "Hypothesis",
+    "HypothesisGenerator",
+    "HypothesisReasoner",
+    "InMemoryCandidateSource",
     "InMemoryCatalogAdapter",
     "JoinPlan",
     "JoinValidator",
     "LeakageDetector",
     "MissingnessAnalyzer",
     "NextExperimentPlanner",
+    "OrchestratorResult",
+    "PairedUplift",
     "PredictiveDiscoveryLoop",
+    "PredictiveDiscoveryOrchestrator",
+    "RandomKFold",
     "RatioFeatures",
+    "RollingOrigin",
     "RowStatistics",
     "ScientistResult",
     "SemanticEntity",
     "SemanticField",
     "SemanticGraph",
     "SemanticRelationship",
+    "SlidingWindow",
     "SnowflakeCatalogAdapter",
     "SplitConformalRegressor",
+    "StopConfig",
+    "StratifiedKFold",
+    "UpliftNotEstablished",
+    "ValidationConfig",
+    "ValidationStrategy",
     "ValueOfInformationEngine",
     "ValueOfInformationResult",
     "add_lag_features",
     "add_noise_controls",
     "add_rolling_features",
     "adversarial_validation",
+    "build_strategy",
     "compare_candidate_datasets",
+    "development_holdout_split",
     "feature_ablation",
     "feature_family_value",
+    "fold_scores",
+    "judge_from_config",
     "make_feature_selector",
     "make_pca",
+    "materialize_folds",
     "model_stability",
+    "noise_control_uplifts",
     "optimize_information_portfolio",
+    "paired_uplift",
+    "pipeline_factory",
     "regression_residual_diagnostics",
+    "run_paired_experiment",
 ]

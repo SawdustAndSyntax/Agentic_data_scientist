@@ -5,6 +5,16 @@ from dataclasses import asdict, dataclass
 
 import pandas as pd
 
+from .judge import KEEP, REVIEW
+
+NOT_ESTABLISHED = "NOT_ESTABLISHED"
+UNVALIDATED = "UNVALIDATED"
+ESTABLISHED_DECISIONS = {KEEP, REVIEW}
+
+
+class UpliftNotEstablished(ValueError):
+    """Raised when economic value is requested for uplift the judge did not establish."""
+
 
 @dataclass(frozen=True)
 class BusinessValueModel:
@@ -76,6 +86,9 @@ class ValueOfInformationResult:
     recurring_roi: float | None
     payback_months: float | None
     recommendation: str
+    evidence_decision: str = UNVALIDATED
+    conservative_improvement_absolute: float | None = None
+    conservative_annual_business_value: float | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -86,10 +99,73 @@ class ValueOfInformationEngine:
     Converts experimentally demonstrated predictive uplift into a transparent
     economic case. It does NOT invent business value: the caller must provide
     the value mapping and data costs.
+
+    ``evaluate_experiment`` is the governed entry point: it consumes an
+    ExperimentResult / ExperimentVerdict and refuses to produce an acquisition
+    recommendation unless the judge's decision is KEEP (or REVIEW, which is
+    computed but flagged). ``evaluate`` on raw scores is retained for ad-hoc
+    what-if analysis and is labelled UNVALIDATED.
     """
 
     def __init__(self, higher_is_better: bool):
         self.higher_is_better = higher_is_better
+
+    def evaluate_experiment(
+        self,
+        experiment,
+        business: BusinessValueModel,
+        cost: DataCost | None = None,
+        *,
+        candidate: str | None = None,
+        metric: str | None = None,
+        strict: bool = False,
+    ) -> ValueOfInformationResult:
+        """Value a judged experiment. ``experiment`` may be an ExperimentResult or an ExperimentVerdict.
+
+        INVALID / INCONCLUSIVE / REJECT results yield a NOT_ESTABLISHED recommendation with
+        zero expected value (or raise when ``strict``). Uses the paired mean uplift and also
+        reports the conservative value implied by the CI lower bound.
+        """
+        verdict = getattr(experiment, "verdict", experiment)
+        name = candidate or getattr(experiment, "name", None) or "candidate"
+        metric = metric or getattr(experiment, "metric", None) or "metric"
+        decision = getattr(verdict, "decision", UNVALIDATED)
+        uplift = getattr(verdict, "uplift", None)
+        business.validate()
+        cost = cost or DataCost()
+        if decision not in ESTABLISHED_DECISIONS or uplift is None:
+            if strict:
+                raise UpliftNotEstablished(f"{name}: experiment decision is {decision}; no economic recommendation can be made")
+            return ValueOfInformationResult(
+                candidate=name,
+                baseline_score=float(getattr(verdict, "baseline_mean", float("nan"))),
+                candidate_score=float(getattr(verdict, "candidate_mean", float("nan"))),
+                metric=metric,
+                improvement_absolute=0.0 if uplift is None else float(uplift.mean),
+                improvement_pct=0.0,
+                expected_annual_business_value=0.0,
+                first_year_cost=cost.first_year_cost + business.annual_compute_cost,
+                recurring_annual_cost=cost.recurring_annual_cost + business.annual_compute_cost,
+                first_year_net_value=-(cost.first_year_cost + business.annual_compute_cost),
+                recurring_net_value=-(cost.recurring_annual_cost + business.annual_compute_cost),
+                first_year_roi=None,
+                recurring_roi=None,
+                payback_months=None,
+                recommendation=f"{NOT_ESTABLISHED}_{decision}",
+                evidence_decision=decision,
+            )
+        baseline = float(verdict.baseline_mean)
+        improvement = float(uplift.mean)
+        candidate_score = baseline + improvement if self.higher_is_better else baseline - improvement
+        result = self._evaluate_scores(name, baseline, candidate_score, metric, business, cost, evidence_decision=decision)
+        conservative = max(0.0, float(uplift.ci_low))
+        cons_value = conservative * (business.value_per_error_unit * business.annual_decisions * business.realization_rate)
+        result = ValueOfInformationResult(
+            **{**result.to_dict(), "conservative_improvement_absolute": conservative, "conservative_annual_business_value": cons_value}
+        )
+        if decision == REVIEW:
+            result = ValueOfInformationResult(**{**result.to_dict(), "recommendation": f"REVIEW_REQUIRED_{result.recommendation}"})
+        return result
 
     def evaluate(
         self,
@@ -99,6 +175,21 @@ class ValueOfInformationEngine:
         metric: str,
         business: BusinessValueModel,
         cost: DataCost | None = None,
+    ) -> ValueOfInformationResult:
+        """Ad-hoc valuation of two raw scores. The result is labelled UNVALIDATED because no
+        Experiment Judge decision backs it; prefer ``evaluate_experiment``."""
+        return self._evaluate_scores(candidate, baseline_score, candidate_score, metric, business, cost, evidence_decision=UNVALIDATED)
+
+    def _evaluate_scores(
+        self,
+        candidate: str,
+        baseline_score: float,
+        candidate_score: float,
+        metric: str,
+        business: BusinessValueModel,
+        cost: DataCost | None = None,
+        *,
+        evidence_decision: str,
     ) -> ValueOfInformationResult:
         business.validate()
         cost = cost or DataCost()
@@ -157,7 +248,26 @@ class ValueOfInformationEngine:
             recurring_roi=None if recurring_roi is None else float(recurring_roi),
             payback_months=None if payback_months is None else float(payback_months),
             recommendation=recommendation,
+            evidence_decision=evidence_decision,
         )
+
+    def rank_experiments(
+        self,
+        experiments,
+        business_models: Mapping[str, BusinessValueModel],
+        costs: Mapping[str, DataCost] | None = None,
+    ) -> pd.DataFrame:
+        """Value a list of judged ExperimentResult objects; only KEEP/REVIEW produce economics."""
+        costs = costs or {}
+        rows = []
+        for exp in experiments:
+            name = exp.name
+            if name not in business_models:
+                continue
+            rows.append(self.evaluate_experiment(exp, business_models[name], costs.get(name)).to_dict())
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows).sort_values(["first_year_net_value", "improvement_pct"], ascending=False).reset_index(drop=True)
 
     def rank(
         self,
@@ -168,7 +278,10 @@ class ValueOfInformationEngine:
         candidate_col: str = "candidate",
         baseline_col: str = "baseline_score",
         candidate_score_col: str = "candidate_score",
+        decision_col: str = "decision",
     ) -> pd.DataFrame:
+        """Rank a frame of experiments. When a ``decision`` column is present only KEEP/REVIEW
+        rows are valued; rows without a decision are labelled UNVALIDATED."""
         costs = costs or {}
         rows = []
 
@@ -176,13 +289,17 @@ class ValueOfInformationEngine:
             name = str(row[candidate_col])
             if name not in business_models:
                 continue
-            result = self.evaluate(
+            decision = str(row[decision_col]) if decision_col in experiments.columns else UNVALIDATED
+            if decision_col in experiments.columns and decision not in ESTABLISHED_DECISIONS:
+                continue
+            result = self._evaluate_scores(
                 candidate=name,
                 baseline_score=float(row[baseline_col]),
                 candidate_score=float(row[candidate_score_col]),
                 metric=metric,
                 business=business_models[name],
                 cost=costs.get(name),
+                evidence_decision=decision,
             )
             rows.append(result.to_dict())
 

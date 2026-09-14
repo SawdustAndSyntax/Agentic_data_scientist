@@ -1,38 +1,28 @@
 # Predictive Discovery Orchestrator
 
-## Mission
-Coordinate the closed-loop Predictive Discovery process while preserving agent boundaries, experiment integrity, and an auditable decision trail.
+Status: **IMPLEMENTED** (`automl_py.orchestrator.PredictiveDiscoveryOrchestrator`). Warehouse-backed candidate sources are **EXPERIMENTAL** (the in-memory source is tested; `PredictiveDiscoveryLoop` bridges catalog candidates with injected loaders).
 
-## Loop
-1. Scientist establishes baseline and diagnosis.
-2. Scientist emits a hypothesis/experiment request.
-3. Discovery searches governed semantics and returns candidates.
-4. Experiment validates and tests candidates.
-5. Value Agent evaluates economic relevance when a value model exists.
-6. Orchestrator records the result.
-7. Scientist analyzes remaining error and proposes the next experiment.
-8. Stop when a configured budget, iteration limit, improvement threshold, or human decision is reached.
+## Loop (as executed)
+```python
+while not stop:
+    diagnosis  = diagnose(current champion, out-of-fold residuals)
+    hypotheses = generator.generate(diagnosis, memory)      # evidence-backed, memory-filtered
+    queue      = candidates(hypothesis) for each hypothesis  # de-duplicated by fingerprint
+    for request in queue:
+        gate: availability, join coverage / explosion, governance -> INVALID before training
+        result  = paired experiment on identical folds (+ noise controls)
+        verdict = judge.evaluate(result)
+        memory.record(...)                                   # KEEP, REJECT, INCONCLUSIVE, INVALID, REVIEW
+        KEEP -> adopt columns, rebase baseline
+lock final feature set -> evaluate the locked holdout once -> model card
+```
+`AutoMLConfig.autonomous_rounds` is the iteration limit; `StopConfig` refines it.
 
-## Stop conditions
-- no defensible next hypothesis;
-- marginal improvement below threshold for N iterations;
-- experiment/data budget exhausted;
-- unresolved validity or governance issue;
-- human stop/approval gate;
-- target performance reached.
+## Stop conditions (recorded as `stop_reason`)
+`MAX_ITERATIONS`, `MAX_EXPERIMENTS`, `NO_MEANINGFUL_IMPROVEMENT`, `NO_DEFENSIBLE_HYPOTHESES`, `NO_CANDIDATES_FOR_HYPOTHESES`, `TARGET_PERFORMANCE_REACHED`, `COMPUTE_BUDGET_EXHAUSTED`, `DATA_QUERY_BUDGET_EXHAUSTED`, `HUMAN_STOP`, `GOVERNANCE_BLOCK`.
 
 ## Audit record
-Every iteration should retain:
-- hypothesis;
-- evidence;
-- candidate sources;
-- join path;
-- temporal assumptions;
-- experiment configuration;
-- failed and successful results;
-- value assumptions;
-- decision;
-- next action.
+`ExperimentMemory` retains, per experiment: hypothesis and evidence, candidate and columns, join path, validation strategy, baseline and candidate fold scores, mean uplift and confidence interval, positive share, noise threshold, required gain, decision and reasons. Persisted to `experiment_memory.json` / `experiment_audit_trail.csv`; the holdout access log proves single evaluation.
 
 ## Governing principle
-Autonomy applies to scientific reasoning and bounded experimentation. Consequential external actions remain explicitly governed.
+Autonomy applies to scientific reasoning and bounded experimentation. Consequential external actions (purchase, subscribe, spend) remain explicitly governed.

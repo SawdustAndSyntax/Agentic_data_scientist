@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 from sklearn.feature_selection import mutual_info_regression
@@ -14,7 +16,8 @@ def regression_residual_diagnostics(X, y_true, y_pred, top_n=15):
         corr = np.corrcoef(s[mask].astype(float), residual[mask])[0, 1]
         try:
             mi = mutual_info_regression(s[mask].to_numpy().reshape(-1, 1), residual[mask], random_state=100)[0]
-        except Exception:
+        except (ValueError, TypeError) as exc:
+            warnings.warn(f"mutual information failed for {col}: {exc}", RuntimeWarning, stacklevel=2)
             mi = np.nan
         rows.append(
             {

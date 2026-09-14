@@ -6,6 +6,7 @@ import re
 
 import pandas as pd
 
+from ...diagnostics import DiagnosticLog
 from ..contracts import SemanticEntity, SemanticField, SemanticRelationship
 from .base import CatalogAdapter
 from .sql import DBAPIExecutor
@@ -29,8 +30,8 @@ def arr(v):
         try:
             z = parser(s)
             return tuple(map(str, z)) if isinstance(z, (list, tuple)) else (str(z),)
-        except Exception:
-            pass
+        except (ValueError, SyntaxError, TypeError):
+            continue
     return tuple(x.strip().strip("\"'") for x in s.strip("[]").split(",") if x.strip())
 
 
@@ -41,6 +42,7 @@ class SnowflakeCatalogAdapter(CatalogAdapter):
         self.exec = executor or DBAPIExecutor(connection)
         self.database = database
         self.schemas = schemas
+        self.diagnostics = DiagnosticLog(warn=False)
 
     def _where_schema(self, col="table_schema"):
         if not self.schemas:
@@ -101,8 +103,8 @@ class SnowflakeCatalogAdapter(CatalogAdapter):
                                 arr(r.get("synonyms")),
                             )
                         )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.diagnostics.error("snowflake_semantic_views", exc, context="semantic view metadata unavailable; physical catalog only")
         return list(entities.values())
 
     def relationships(self):
@@ -125,8 +127,8 @@ class SnowflakeCatalogAdapter(CatalogAdapter):
                         1.0,
                     )
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.diagnostics.error("snowflake_semantic_relationships", exc, context="semantic relationships unavailable")
         return out
 
     def sample(self, qualified_name, limit=1000):

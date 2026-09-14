@@ -20,16 +20,24 @@ class ConformalPrediction:
 class SplitConformalRegressor:
     """Simple distribution-free split-conformal intervals for regression."""
 
-    def __init__(self, estimator, alpha: float = 0.10, calibration_size: float = 0.2, random_state: int = 100):
+    def __init__(self, estimator, alpha: float = 0.10, calibration_size: float = 0.2, random_state: int = 100, chronological: bool = False):
+        """``chronological=True`` reserves the *last* ``calibration_size`` fraction of rows (already
+        sorted by time) for calibration instead of a random sample; use it for temporal problems."""
         if not 0 < alpha < 1:
             raise ValueError("alpha must be between 0 and 1")
         self.estimator = estimator
         self.alpha = alpha
         self.calibration_size = calibration_size
         self.random_state = random_state
+        self.chronological = chronological
 
     def fit(self, X: pd.DataFrame, y):
-        Xfit, Xcal, yfit, ycal = train_test_split(X, y, test_size=self.calibration_size, random_state=self.random_state)
+        if self.chronological:
+            n_cal = max(1, round(len(X) * self.calibration_size))
+            Xfit, Xcal = X.iloc[:-n_cal], X.iloc[-n_cal:]
+            yfit, ycal = pd.Series(np.asarray(y)).iloc[:-n_cal], pd.Series(np.asarray(y)).iloc[-n_cal:]
+        else:
+            Xfit, Xcal, yfit, ycal = train_test_split(X, y, test_size=self.calibration_size, random_state=self.random_state)
         self.model_ = clone(self.estimator)
         self.model_.fit(Xfit, yfit)
         pred = self.model_.predict(Xcal)

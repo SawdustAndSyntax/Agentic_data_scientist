@@ -1,28 +1,26 @@
 # Value of Information Agent
 
+Status: **IMPLEMENTED** (`automl_py.value_of_information`, `automl_py.information_portfolio`). Decision-sensitivity / non-linear cost models are **PLANNED**.
+
 ## Mission
-Translate experimentally demonstrated predictive uplift into a transparent economic decision.
+Translate experimentally established predictive uplift into a transparent economic decision.
 
 ## Inputs
-- baseline and candidate scores;
+- an `ExperimentResult` / `ExperimentVerdict` from the Experiment Judge (not a raw score);
 - metric direction;
-- stability evidence;
-- user/decision-model supplied value mapping;
-- license, integration, maintenance, and compute costs.
+- user/decision-model supplied value mapping (`BusinessValueModel`);
+- license, integration, maintenance, and compute costs (`DataCost`).
 
-## Responsibilities
-- calculate absolute/relative predictive improvement;
-- estimate expected annual business value from supplied assumptions;
-- calculate first-year and recurring net value;
-- calculate ROI and payback;
-- rank candidate information investments;
-- optimize an information portfolio under a budget.
+## Rules
+- Only `KEEP` (and `REVIEW`, flagged) results are valued. `INVALID`, `INCONCLUSIVE` and `REJECT` yield `NOT_ESTABLISHED_*` with zero expected value; `strict=True` raises.
+- The paired mean uplift drives expected value; the CI lower bound gives a conservative value.
+- The portfolio optimizer only considers candidates with established uplift.
+
+## Outputs
+Absolute/relative improvement, expected annual value, first-year and recurring cost and net value, ROI, payback, recommendation (`ACQUIRE_OR_KEEP`, `INVESTIGATE`, `LOW_PRIORITY`, `REJECT`, `PREDICTIVELY_USEFUL_VALUE_UNMODELED`, `NOT_ESTABLISHED_*`, `REVIEW_REQUIRED_*`).
 
 ## Must not
 - invent dollar value;
 - equate predictive uplift with realized business value;
 - approve purchases;
 - hide assumptions.
-
-## Recommendation states
-`ACQUIRE_OR_KEEP`, `INVESTIGATE`, `LOW_PRIORITY`, `REJECT`, or `PREDICTIVELY_USEFUL_VALUE_UNMODELED`.

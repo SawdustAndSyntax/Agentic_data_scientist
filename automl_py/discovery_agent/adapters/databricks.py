@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from ...diagnostics import DiagnosticLog
 from ..contracts import SemanticEntity, SemanticField, SemanticRelationship
 from .base import CatalogAdapter
 from .sql import DBAPIExecutor
@@ -20,6 +21,7 @@ class DatabricksCatalogAdapter(CatalogAdapter):
         self.exec = executor or DBAPIExecutor(connection)
         self.catalog = catalog
         self.schemas = schemas
+        self.diagnostics = DiagnosticLog(warn=False)
 
     def _prefix(self):
         return f"{qi(self.catalog)}.information_schema" if self.catalog else "system.information_schema"
@@ -77,8 +79,8 @@ class DatabricksCatalogAdapter(CatalogAdapter):
                             str(r.get("constraint_name", "fk")), s, t, (str(r.source_column),), (str(r.target_column),), "foreign_key", 1.0
                         )
                     )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.diagnostics.error("databricks_constraints", exc, context="referential constraint metadata unavailable")
         return out
 
     def sample(self, qualified_name, limit=1000):

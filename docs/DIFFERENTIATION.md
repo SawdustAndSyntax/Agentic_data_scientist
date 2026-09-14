@@ -63,12 +63,17 @@ Executive:
 
 ## What we should not claim
 
-Do not claim:
+Do not claim (and the README status table must not contradict this):
 - automatic causal discovery;
 - guaranteed best possible model;
 - that semantic similarity proves predictive value;
 - that high feature importance proves business value;
 - that a candidate dataset should be purchased before controlled testing;
 - that the system can know information availability without explicit metadata or a defensible inference.
+
+Also do not claim, until tests demonstrate it:
+- fully autonomous iterative experimentation beyond the in-memory candidate source (warehouse-backed sources are experimental);
+- LLM-generated hypotheses (only the deterministic generator ships; the reasoner is a hook);
+- non-linear decision-sensitivity value models.
 
 The product is strongest when it is rigorous about uncertainty.

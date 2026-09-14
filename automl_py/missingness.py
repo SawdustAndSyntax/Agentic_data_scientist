@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
@@ -50,8 +52,8 @@ class MissingnessAnalyzer:
                             )
                         )
                     )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    warnings.warn(f"missingness model failed for {col}: {type(exc).__name__}: {exc}", RuntimeWarning, stacklevel=2)
             interp = (
                 "insufficient data"
                 if not np.isfinite(auc)

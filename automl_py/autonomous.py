@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
 
+from .ablation import feature_ablation
 from .config import AutoMLConfig
-from .core import AutoML
-from .experiments import feature_family_value
+from .diagnostics import DiagnosticLog
+from .experiments import feature_family_value, judge_from_config
+from .orchestrator import OrchestratorResult, PredictiveDiscoveryOrchestrator, StopConfig
 from .planner import NextExperimentPlanner
-from .preprocessing import build_feature_selector, build_preprocessor
-from .registry import build_estimator
 from .scientist import AutoMLScientist, ScientistResult
 from .stability import model_stability
 from .temporal import FeatureAvailabilityRegistry
@@ -28,6 +27,9 @@ class AutonomousScientistResult:
     uncertainty: dict | None
     temporal_audit: pd.DataFrame
     information_value: pd.DataFrame
+    ablation: pd.DataFrame | None = None
+    loop: OrchestratorResult | None = None
+    diagnostics: DiagnosticLog = field(default_factory=DiagnosticLog)
 
     @property
     def automl(self):
@@ -43,20 +45,33 @@ class AutonomousScientistResult:
         parts = [self.scientist.summary(), "", "Autonomous experiment plan", "=" * 26]
         for _, r in self.experiment_plan.head(8).iterrows():
             parts.append(f"P{int(r.priority)} [{r.category}] {r.experiment}: {r.rationale}")
+        if not self.information_value.empty:
+            parts += ["", "Feature-family information value (paired, judged)"]
+            for _, r in self.information_value.iterrows():
+                parts.append(
+                    f"- {r.feature_family}: {r.decision} uplift={r.mean_uplift:+.4f} CI[{r.ci_low:.4f}, {r.ci_high:.4f}] positive={r.positive_share:.0%}"
+                )
         if self.uncertainty:
             parts += [
                 "",
-                f"Conformal interval: {(1 - self.uncertainty['alpha']) * 100:.0f}% nominal, radius={self.uncertainty['radius']:.4f}, empirical coverage={self.uncertainty['empirical_coverage']:.3f}",
+                f"Conformal interval: {(1 - self.uncertainty['alpha']) * 100:.0f}% nominal, radius={self.uncertainty['radius']:.4f}, "
+                f"empirical coverage={self.uncertainty['empirical_coverage']:.3f} ({self.uncertainty['calibration']})",
             ]
+        if self.loop is not None:
+            parts += ["", self.loop.summary()]
+        errs = self.diagnostics.errors()
+        if errs:
+            parts += ["", f"{len(errs)} diagnostic error(s) recorded; see diagnostics.csv"]
         return "\n".join(parts)
 
 
 class AutonomousAutoMLScientist:
-    """v0.6 orchestration layer.
+    """Single-pass diagnostics plus, when a candidate source is supplied, the real iterative loop.
 
-    It does not fabricate or automatically purchase external data. It identifies missing-signal
-    hypotheses, proves value when candidate feature sets are supplied, and recommends the next
-    controlled experiment based on validity, robustness, information value and residual error.
+    It does not fabricate or automatically purchase external data. It identifies
+    missing-signal hypotheses, judges candidate feature sets on identical folds
+    against noise controls and a practical-significance floor, and records every
+    experiment in memory.
     """
 
     def __init__(
@@ -65,41 +80,60 @@ class AutonomousAutoMLScientist:
         context: str = "",
         feature_availability: FeatureAvailabilityRegistry | None = None,
         feature_families: dict[str, list[str]] | None = None,
+        candidate_source=None,
+        stop: StopConfig | None = None,
+        prediction_time=None,
     ):
         self.config = config or AutoMLConfig()
         self.context = context
         self.feature_availability = feature_availability or FeatureAvailabilityRegistry()
         self.feature_families = feature_families or {}
+        self.candidate_source = candidate_source
+        self.stop = stop
+        self.prediction_time = prediction_time
         self.result_ = None
 
     def fit(self, data: pd.DataFrame, target_names: str | list[str]):
         c = self.config
+        diagnostics = DiagnosticLog()
         df = pd.DataFrame(data).copy()
         targets = [target_names] if isinstance(target_names, str) else list(target_names)
         target = targets[0]
-        Xraw = df.drop(columns=targets)
-        temporal_audit = self.feature_availability.audit(Xraw.columns)
+        vcfg = c.resolved_validation()
+        reserved = set(targets) | ({vcfg.timestamp_column} if vcfg.timestamp_column else set()) | set(vcfg.group_columns)
+        Xraw = df.drop(columns=[col for col in reserved if col in df.columns])
+        temporal_audit = self.feature_availability.audit(Xraw.columns, self.prediction_time)
         unavailable = temporal_audit.loc[temporal_audit.temporal_leakage_risk, "feature"].tolist()
+        unknown = temporal_audit.loc[temporal_audit.unknown_availability, "feature"].tolist()
         if unavailable:
             if c.temporal_strict:
                 raise ValueError("Temporal leakage risk; unavailable at prediction time: " + ", ".join(unavailable))
             df = df.drop(columns=unavailable)
+            diagnostics.record("temporal", "WARNING", f"dropped features unavailable at prediction time: {', '.join(unavailable)}")
+        if unknown:
+            if c.unknown_availability_policy == "strict":
+                raise ValueError("Unknown feature availability (declare in FeatureAvailabilityRegistry): " + ", ".join(unknown))
+            diagnostics.record(
+                "temporal",
+                "WARNING" if c.unknown_availability_policy == "review" else "INFO",
+                f"{len(unknown)} feature(s) with UNKNOWN availability kept for review: {', '.join(unknown[:8])}",
+            )
 
-        base = AutoMLScientist(c, self.context).fit(df, targets)
-        bestrow = base.automl.best_results[base.automl.best_results.target == target]
-        stability = None
-        uncertainty = None
+        base_cfg = replace(c, evaluate_holdout=False) if self.candidate_source is not None else c
+        base = AutoMLScientist(base_cfg, self.context).fit(df, targets)
+        diagnostics.extend(base.diagnostics)
+        automl = base.automl
+        stability = uncertainty = ablation = None
         info = pd.DataFrame()
-        if not bestrow.empty:
-            tag = bestrow.iloc[0].tag
-            model = base.automl.models[tag]
-            X = df.drop(columns=targets)
-            y = df[target]
-            mask = y.notna()
-            X = X.loc[mask]
-            y = y.loc[mask]
+        judge = judge_from_config(c)
+        if target in automl.folds:
+            tag = automl.best_row(target).tag
+            model = automl.models[tag]
+            folds = automl.folds[target]
+            X, y = automl.development_frame(target, df)
+            factory = automl.champion_factory(target)
             if c.run_stability_analysis:
-                try:
+                with diagnostics.capture("stability"):
                     stability = model_stability(
                         model,
                         X,
@@ -110,60 +144,50 @@ class AutonomousAutoMLScientist:
                         test_size=c.test_size,
                         random_state=c.random_state,
                         n_jobs=1,
+                        folds=folds,
+                        diagnostics=diagnostics,
                     )
-                except Exception:
-                    stability = None
             if c.task == "regression" and c.run_uncertainty:
-                try:
-                    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=c.test_size, random_state=c.random_state)
-                    conf = SplitConformalRegressor(model, alpha=c.uncertainty_alpha, random_state=c.random_state).fit(Xtr, ytr)
+                with diagnostics.capture("uncertainty"):
+                    chronological = folds.is_temporal
+                    order = np.argsort(folds.timestamps.to_numpy(), kind="stable") if chronological else np.arange(len(X))
+                    Xo, yo = X.iloc[order], y.iloc[order]
+                    n_eval = max(1, round(len(Xo) * c.test_size))
+                    Xfit, Xev, yfit, yev = Xo.iloc[:-n_eval], Xo.iloc[-n_eval:], yo.iloc[:-n_eval], yo.iloc[-n_eval:]
+                    conf = SplitConformalRegressor(
+                        model, alpha=c.uncertainty_alpha, random_state=c.random_state, chronological=chronological
+                    ).fit(Xfit, yfit)
                     uncertainty = {
                         "alpha": c.uncertainty_alpha,
                         "radius": conf.radius_,
-                        "empirical_coverage": conf.empirical_coverage(Xte, yte),
-                        "evaluation": "held-out test split not used for conformal fitting/calibration",
+                        "empirical_coverage": conf.empirical_coverage(Xev, yev),
+                        "calibration": "chronological development split" if chronological else "random development split",
+                        "evaluation": "last development rows; the locked holdout is not used",
                     }
-                except Exception:
-                    uncertainty = None
             if self.feature_families:
-                try:
-                    row = bestrow.iloc[0]
-                    params = json.loads(row.best_params) if row.best_params else {}
-
-                    def factory(Xsubset):
-                        pipe = Pipeline(
-                            [
-                                (
-                                    "prep",
-                                    build_preprocessor(
-                                        Xsubset,
-                                        row.preprocess,
-                                        c.pca_variance,
-                                        c.interaction_terms,
-                                        c.interaction_degree,
-                                        row.imputation,
-                                        c.add_missing_indicators,
-                                    ),
-                                ),
-                                ("select", build_feature_selector(c.task, row.selection, c.feature_selection_k)),
-                                ("model", build_estimator(row.model, c.task, c.random_state)),
-                            ]
-                        )
-                        if params:
-                            pipe.set_params(**params)
-                        return pipe
-
+                with diagnostics.capture("feature_family_value"):
                     info = feature_family_value(
                         factory,
                         X,
                         y,
-                        cv=AutoML(c)._cv(),
+                        cv=folds,
                         metric=c.resolved_metric(),
                         feature_families=self.feature_families,
                         n_jobs=c.n_jobs,
+                        judge=judge,
+                        n_noise_controls=c.noise_controls if c.run_noise_controls else 0,
+                        random_state=c.random_state,
                     )
-                except Exception:
-                    info = pd.DataFrame()
+            if c.run_feature_ablation:
+                with diagnostics.capture("feature_ablation"):
+                    vi = automl.variable_importance
+                    top = (
+                        vi[vi.tag == tag].sort_values("importance", ascending=False).variable.head(c.max_ablation_features).tolist()
+                        or list(X.columns)[: c.max_ablation_features]
+                    )
+                    ablation = feature_ablation(
+                        factory, X, y, folds, c.resolved_metric(), n_jobs=c.n_jobs, feature_groups={f: [f] for f in top}
+                    )
 
         plan = NextExperimentPlanner().plan(
             metric=c.resolved_metric(),
@@ -176,7 +200,25 @@ class AutonomousAutoMLScientist:
             temporal_audit=temporal_audit,
             information_value=info,
         )
-        result = AutonomousScientistResult(base, plan, stability, uncertainty, temporal_audit, info)
+        loop = None
+        if self.candidate_source is not None and target in automl.folds:
+            orchestrator = PredictiveDiscoveryOrchestrator(
+                c,
+                candidate_source=self.candidate_source,
+                feature_availability=self.feature_availability,
+                judge=judge,
+                stop=self.stop,
+                diagnostics=diagnostics,
+                prediction_time=self.prediction_time,
+                n_jobs=1 if c.n_jobs in (None, 0) else (1 if c.n_jobs < 0 else c.n_jobs),
+            )
+            loop = orchestrator.run(df, target, self.context, scientist_result=base)
+            # surface the final holdout number on the champion row for reporting
+            if loop.holdout_evaluation is not None:
+                automl.holdout_evaluations[target] = loop.holdout_evaluation
+                automl.best_results.loc[automl.best_results.target == target, "holdout_performance"] = loop.holdout_evaluation.score
+
+        result = AutonomousScientistResult(base, plan, stability, uncertainty, temporal_audit, info, ablation, loop, diagnostics)
         self.result_ = result
         out = Path(c.artifact_dir)
         out.mkdir(parents=True, exist_ok=True)
@@ -184,6 +226,8 @@ class AutonomousAutoMLScientist:
         temporal_audit.to_csv(out / "temporal_availability_audit.csv", index=False)
         if not info.empty:
             info.to_csv(out / "feature_family_value.csv", index=False)
+        if ablation is not None:
+            ablation.to_csv(out / "feature_ablation.csv", index=False)
         if stability:
             stability["scores"].to_csv(out / "stability_scores.csv", index=False)
             stability["feature_stability"].to_csv(out / "feature_stability.csv", index=False)
@@ -191,4 +235,5 @@ class AutonomousAutoMLScientist:
         if uncertainty:
             (out / "uncertainty_summary.json").write_text(json.dumps(uncertainty, indent=2))
         (out / "autonomous_summary.txt").write_text(result.summary())
+        diagnostics.to_frame().to_csv(out / "diagnostics.csv", index=False)
         return result

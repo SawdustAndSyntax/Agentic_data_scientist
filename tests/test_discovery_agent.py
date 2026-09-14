@@ -1,5 +1,6 @@
 import pandas as pd
 
+from automl_py import ExperimentMemory, FeatureAvailabilityRegistry
 from automl_py.discovery_agent import (
     DataDiscoveryAgent,
     DiscoveryRequest,
@@ -73,7 +74,9 @@ def test_join_validator_rejects_row_explosion():
     left = pd.DataFrame({"id": [1, 2, 3], "y": [1, 2, 3]})
     right = pd.DataFrame({"id": [1, 1, 1, 2, 3], "x": [1, 2, 3, 4, 5]})
     v = JoinValidator().validate_frames(left, right, ["id"], ["id"])
-    assert v.status == "review"
+    assert v.status == "invalid"
+    assert not v.valid
+    assert "ROW_EXPLOSION" in v.reason_codes
     assert v.row_multiplier > 1.2
     assert v.duplicate_key_risk
 
@@ -90,13 +93,18 @@ def test_predictive_discovery_loop_keeps_uplift():
         return extra, ["store_id"], ["store_id"]
 
     def runner(df):
-        return {"score": 0.8 if "temperature" in df.columns else 0.6, "higher_is_better": True}
+        # identical folds for baseline and candidate: five paired fold scores
+        base_scores = [0.60, 0.62, 0.58, 0.61, 0.59]
+        return {"scores": [s + (0.2 if "temperature" in df.columns else 0.0) for s in base_scores], "higher_is_better": True}
 
-    r = PredictiveDiscoveryLoop(agent).run(
-        req, anchor_entities=["analytics.public.sales"], base_df=base, candidate_loader=loader, experiment_runner=runner, top_n=1
-    )
-    assert r.tested_candidates.iloc[0].status == "keep"
-    assert r.tested_candidates.iloc[0].uplift > 0
+    memory = ExperimentMemory()
+    loop = PredictiveDiscoveryLoop(agent, feature_availability=FeatureAvailabilityRegistry({"temperature": "-1d"}), memory=memory)
+    r = loop.run(req, anchor_entities=["analytics.public.sales"], base_df=base, candidate_loader=loader, experiment_runner=runner, top_n=1)
+    row = r.tested_candidates.iloc[0]
+    assert row.decision == "KEEP"
+    assert row.mean_uplift > 0
+    assert row.ci_low > 0
+    assert len(memory) == 1 and memory.records[0].decision == "KEEP"
 
 
 class FakeExecutor:

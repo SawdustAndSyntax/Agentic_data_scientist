@@ -6,16 +6,28 @@ from sklearn.model_selection import cross_val_score
 from .metrics import scorer_name
 
 
-def feature_ablation(pipeline, X, y, cv, metric, n_jobs=-1, feature_groups=None):
+def _fresh(model_or_factory, X):
+    """A factory ``f(X) -> estimator`` is rebuilt per column subset; a fitted/unfitted estimator is cloned."""
+    if callable(model_or_factory) and not hasattr(model_or_factory, "fit"):
+        return model_or_factory(X)
+    return clone(model_or_factory)
+
+
+def feature_ablation(model_or_factory, X, y, cv, metric, n_jobs=-1, feature_groups=None):
+    """Degradation when each feature group is removed, scored on the shared folds.
+
+    Pass the champion *factory* (``AutoMLResult.champion_factory``) so the preprocessor is
+    rebuilt for each column subset; a plain estimator is cloned instead.
+    """
     groups = feature_groups or {c: [c] for c in X.columns}
     scorer = scorer_name(metric)
-    baseline = float(np.nanmean(cross_val_score(clone(pipeline), X, y, cv=cv, scoring=scorer, n_jobs=n_jobs)))
+    baseline = float(np.nanmean(cross_val_score(_fresh(model_or_factory, X), X, y, cv=cv, scoring=scorer, n_jobs=n_jobs)))
     rows = []
     for name, cols in groups.items():
         keep = [c for c in X.columns if c not in set(cols)]
         if not keep:
             continue
-        score = float(np.nanmean(cross_val_score(clone(pipeline), X[keep], y, cv=cv, scoring=scorer, n_jobs=n_jobs)))
+        score = float(np.nanmean(cross_val_score(_fresh(model_or_factory, X[keep]), X[keep], y, cv=cv, scoring=scorer, n_jobs=n_jobs)))
         rows.append(
             {
                 "feature_group": name,

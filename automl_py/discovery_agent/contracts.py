@@ -67,21 +67,28 @@ class JoinPlan:
 
 @dataclass
 class DatasetCandidate:
+    """A ranked candidate. ``temporal_validity`` is None when point-in-time availability
+    is unknown; unknown is scored conservatively and routed to REVIEW, never treated as safe."""
+
     entity: SemanticEntity
     relevance: float
     joinability: float
-    temporal_validity: float
+    temporal_validity: float | None
     coverage: float = 0.5
     quality: float = 0.5
     cost: float = 0.0
     join_plan: JoinPlan | None = None
     reasons: list[str] = field(default_factory=list)
+    availability: str = "unknown"  # available | unavailable | unknown
+    governance_status: str = "unknown"
+
+    @property
+    def temporal_score(self) -> float:
+        return 0.5 if self.temporal_validity is None else float(self.temporal_validity)
 
     @property
     def score(self) -> float:
         # Value-oriented and deliberately conservative: a candidate with no join
-        # path or poor temporal validity cannot win on semantic relevance alone.
-        positive = (
-            0.30 * self.relevance + 0.25 * self.joinability + 0.20 * self.temporal_validity + 0.15 * self.coverage + 0.10 * self.quality
-        )
+        # path or unavailable data cannot win on semantic relevance alone.
+        positive = 0.30 * self.relevance + 0.25 * self.joinability + 0.20 * self.temporal_score + 0.15 * self.coverage + 0.10 * self.quality
         return max(0.0, min(1.0, positive - 0.10 * max(0.0, min(1.0, self.cost))))

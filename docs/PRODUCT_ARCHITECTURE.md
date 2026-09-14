@@ -1,5 +1,10 @@
 # Predictive Discovery: Product Architecture
 
+> Implementation status per capability is tracked in the README table. As of 0.10 the closed loop,
+> time-aware validation, the locked holdout, the Experiment Judge, experiment memory and
+> Value-of-Information gating are implemented and tested; LLM reasoning and warehouse-backed
+> candidate sources for the orchestrator remain planned/experimental.
+
 ## Product thesis
 
 Predictive Discovery is an autonomous, platform-neutral system for answering a question that conventional AutoML, semantic layers, catalogs, and feature stores do not answer on their own:
@@ -115,6 +120,19 @@ The discovery agent distinguishes four types of signal:
 - **Unknown signal** — residual structure suggests missing information but no defensible candidate is identified yet.
 
 Unknown signal is a valid outcome. The system must not fabricate a causal explanation simply to complete a loop.
+
+## Validation contract
+
+Two controls, both required:
+
+- **Validation strategy** — did the model train only on information that existed before each validation observation? Temporal strategies (`rolling_origin`, `expanding_window`, `sliding_window`) never train on rows on/after the validation window; every experiment shares the same materialized folds.
+- **Feature availability** — was this feature knowable when the prediction was made? `available` / `unavailable` / `unknown`; unknown is never treated as safe.
+
+The final holdout is split off before search (the last periods for temporal problems), locked, and evaluated once for the final champion. No candidate, feature, dataset or hyperparameter is ever selected on it.
+
+## Experiment Judge
+
+A candidate is only `KEEP` when, on identical folds, the paired mean uplift clears the larger of the practical floor (`minimum_feature_gain` / `minimum_relative_gain`) and the empirical noise floor (random and permuted control features), the bootstrap confidence interval excludes zero, and the positive-fold share is high enough. Otherwise `REJECT` (even the optimistic bound fails), `INCONCLUSIVE` (uncertain), `INVALID` (temporal, join, leakage or design violation) or `REVIEW` (KEEP-level evidence with an open governance/availability/cost question).
 
 ## Candidate evaluation contract
 

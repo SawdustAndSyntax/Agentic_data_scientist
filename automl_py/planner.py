@@ -107,14 +107,27 @@ class NextExperimentPlanner:
                 )
 
         if information_value is not None and not information_value.empty:
-            weak = information_value[information_value.scorer_gain <= 0]
+            if "decision" in information_value.columns:
+                weak = information_value[information_value.decision.isin(["REJECT"])]
+                unclear = information_value[information_value.decision.isin(["INCONCLUSIVE"])]
+            else:
+                weak = information_value[information_value.scorer_gain <= 0]
+                unclear = information_value.iloc[0:0]
             if not weak.empty:
                 add(
                     6,
                     "Prune low-value feature families",
-                    "Some feature families failed to improve CV scorer.",
+                    "Judged REJECT on paired folds: " + ", ".join(weak.feature_family.head(5)) + ".",
                     "Simpler model matches or improves generalization after pruning.",
                     "simplification",
+                )
+            if not unclear.empty:
+                add(
+                    5,
+                    "Re-test inconclusive feature families",
+                    "Uplift CI includes zero for: " + ", ".join(unclear.feature_family.head(5)) + ".",
+                    "More folds/periods or a stronger design produces a KEEP or REJECT decision.",
+                    "information",
                 )
 
         if not rec:
